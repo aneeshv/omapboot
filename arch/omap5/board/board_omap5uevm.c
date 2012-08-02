@@ -64,6 +64,30 @@ static struct partition * omap5uevm_get_partition(void)
 
 static void omap5uevm_mux_init(void)
 {
+	/* core padconf essential */
+	setup_core(CONTROL_PADCONF_EMMC_CLK, (PTU | IEN | M0));
+	setup_core(CONTROL_PADCONF_EMMC_CMD, (PTU | IEN | M0));
+	setup_core(CONTROL_PADCONF_EMMC_DATA0, (PTU | IEN | M0));
+	setup_core(CONTROL_PADCONF_EMMC_DATA1, (PTU | IEN | M0));
+	setup_core(CONTROL_PADCONF_EMMC_DATA2, (PTU | IEN | M0));
+	setup_core(CONTROL_PADCONF_EMMC_DATA3, (PTU | IEN | M0));
+	setup_core(CONTROL_PADCONF_EMMC_DATA4, (PTU | IEN | M0));
+	setup_core(CONTROL_PADCONF_EMMC_DATA5, (PTU | IEN | M0));
+	setup_core(CONTROL_PADCONF_EMMC_DATA6, (PTU | IEN | M0));
+	setup_core(CONTROL_PADCONF_EMMC_DATA7, (PTU | IEN | M0));
+	setup_core(CONTROL_PADCONF_SDCARD_CLK, (PTU | IEN | M0));
+	setup_core(CONTROL_PADCONF_SDCARD_CMD, (PTU | IEN | M0));
+	setup_core(CONTROL_PADCONF_SDCARD_DATA0, (PTU | IEN | M0));
+	setup_core(CONTROL_PADCONF_SDCARD_DATA1, (PTU | IEN | M0));
+	setup_core(CONTROL_PADCONF_SDCARD_DATA2, (PTU | IEN | M0));
+	setup_core(CONTROL_PADCONF_SDCARD_DATA3, (PTU | IEN | M0));
+	setup_core(CONTROL_PADCONF_UART3_RX_IRRX, (PTU | IEN | M0));
+	setup_core(CONTROL_PADCONF_UART3_TX_IRTX, (M0));
+
+	/* wakeup padconf essential */
+	setup_wakeup(CONTROL_WAKEUP_SR_PMIC_SCL, (PTU | IEN | M0));
+	setup_wakeup(CONTROL_WAKEUP_SR_PMIC_SDA, (PTU | IEN | M0));
+	setup_wakeup(CONTROL_WAKEUP_SYS_32K, (IEN | M0));
 
 	/* push button (GPIO 83) for fastboot mode */
 	setup_core(CONTROL_PADCONF_HSI2_ACDATA, (IEN | M6));
@@ -109,6 +133,9 @@ static u8 omap5uevm_get_flash_slot(void)
 
 static void omap5uevm_prcm_init(void)
 {
+	/* Work around to make sure EMIF 2 is in good health*/
+	writel(0x0100040D, EMIF2_SDRAM_REFRESH_CONTROL);
+	writel(0x0000040D, EMIF2_SDRAM_REFRESH_CONTROL);
 	prcm_init();
 }
 

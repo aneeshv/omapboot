@@ -36,6 +36,7 @@
 #include <common/fastboot.h>
 #include <common/omap_rom.h>
 #include <common/usbboot_common.h>
+#include <common/alloc.h>
 
 #include <version.h>
 
@@ -87,6 +88,8 @@ void eboot(unsigned *info)
 	if (boot_ops->board_ops->board_ddr_init)
 		boot_ops->board_ops->board_ddr_init(boot_ops->proc_ops);
 
+	init_memory_alloc();
+
 	if (boot_ops->board_ops->board_gpmc_init)
 		boot_ops->board_ops->board_gpmc_init();
 
@@ -135,14 +138,14 @@ void eboot(unsigned *info)
 		serial_puts("boot device: MMC1\n");
 		if (boot_ops->board_ops->board_set_flash_slot)
 			boot_ops->board_ops->board_set_flash_slot(bootdevice);
-		do_booti("mmc");
+		do_booti("mmc", NULL);
 		break;
 	case 0x06:
 	case 0x07:
 		if (boot_ops->board_ops->board_set_flash_slot)
 			boot_ops->board_ops->board_set_flash_slot(bootdevice);
 		serial_puts("boot device: MMC2\n");
-		do_booti("mmc");
+		do_booti("mmc", NULL);
 		break;
 	default:
 		serial_puts("boot device: unknown\n");
