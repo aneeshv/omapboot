@@ -44,8 +44,6 @@
 #include <omap5/hw.h>
 #endif
 
-#include "config.h"
-
 #ifdef DEBUG
 #define DBG(x...) printf(x)
 #else
@@ -212,21 +210,24 @@ static int mmc_init(void)
 		break;
 
 
-	/* Configure eMMC to 8b @ 48 MHz DDR */
+	/* Configure eMMC width and divider clock:
+	*  SDR mode for omap4 and DDR mode for omap5
+	*/
+
 	case MMCSD_TYPE_MMC:
 
-		/*configure 8b ddr mode*/
-		n = mmc_configure(&mmcd.mmc, MMCSD_CONFIGID_SETDDRMODE,
-				MMCSD_8BIT_DDR_BUS_WIDTH_SUPPORTED);
+		/* configure SDR/DDR mode and bus width */
+		n = mmc_configure(&mmcd.mmc, MMCSD_CONFIGID,
+				MMCSD_WIDTH_SUPPORTED);
 		if (n) {
 			printf("mmc_configure: failed to set DDR "
 							"mode\n");
 			return n;
 		}
 
-		/*configure higher clock*/
+		/* configure clock divider*/
 		n = mmc_configure(&mmcd.mmc, MMCSD_CONFIGID_SETCLOCK,
-					MMCSD_CLOCK_DIVIDER_48MHz);
+					MMCSD_CLOCK_DIVIDER);
 		if (n) {
 			printf("mmc_configure: failed to set clock\n");
 			return n;
@@ -288,14 +289,16 @@ static int mmc_write(u64 start_sec, u64 sectors, void *data)
 	if (dd->addressing == MMCSD_ADDRESSING_SECTOR)
 		/* In case of sector addressing,
 		the address given is the sector nb */
-		arg = start_sec;
+		arg = (u32)start_sec;
 	else
 		/* In case of byte addressing,
 		the address given is start sector * MMCSD_SECTOR_SIZE */
-		arg = start_sec << MMCSD_SECTOR_SIZE_SHIFT;
+		arg = (u32)start_sec << MMCSD_SECTOR_SIZE_SHIFT;
 
 	blkreg = mmc_reg_read(OMAP_HSMMC_BLK_OFFSET);
-	mmc_reg_write(OMAP_HSMMC_BLK_OFFSET, (blkreg | sectors<<16));
+	blkreg &= ~HSMMC_BLK_NBLK_MASK;
+	mmc_reg_write(OMAP_HSMMC_BLK_OFFSET, (blkreg |
+			(u32)sectors<<HSMMC_BLK_NBLK_SHIFT));
 
 	/* Send the CMD25 write command */
 	n = mmcd.rom_hal_mmchs_sendcommand(dd->moduleid,

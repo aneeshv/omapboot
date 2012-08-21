@@ -30,7 +30,6 @@
 #include <aboot/aboot.h>
 #include <aboot/io.h>
 #include <common/omap_rom.h>
-#include "config.h"
 
 int i2c_init(hal_i2c i2c_id)
 {
@@ -75,6 +74,12 @@ int i2c_read(hal_i2c i2c_id, u16 slave, u32 count, void *data, u32 start_time,
 								u32 timeout)
 {
 	int n;
+
+	/* i2c - write */
+	n = rom_hal_i2c_write(i2c_id, slave, 1, data, start_time,
+								timeout);
+	if (n)
+		return n; /* returns when n!=STATUS_OKAY */
 
 	/* i2c - read */
 	n = rom_hal_i2c_read(i2c_id, slave, count, data, start_time,

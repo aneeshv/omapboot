@@ -77,8 +77,8 @@ plus_sec := $(shell set -e;						\
 		then echo "+sec";					\
 		else echo "";						\
 		fi)
-TARGET_AFLAGS += $(TARGET_FLAGS) -Wa,-march=armv7-a$(plus_sec)
-TARGET_CFLAGS += $(TARGET_FLAGS) -march=armv7-a
+TARGET_AFLAGS := $(TARGET_FLAGS) -Wa,-march=armv7-a$(plus_sec)
+TARGET_CFLAGS := $(TARGET_FLAGS) -march=armv7-a
 TARGET_CC_LOC := $(shell $(TARGET_CC) $(TARGET_CFLAGS) -print-search-dirs|grep ^install|cut -d ':' -f2|tr -d ' ')
 
 TARGET_LIBGCC := $(shell $(TARGET_CC) $(TARGET_CFLAGS) -print-libgcc-file-name)
@@ -128,7 +128,7 @@ include build/rules.mk
 include host/tools/host_usbboot.mk
 
 # Build the target with it's dependencies
-include arch/$(MACH)/board/$(BOARD).mk
+include arch/$(MACH)/$(MACH).mk
 
 COMMON_OBJS := 	crc32.o \
 		libc/utils.o \

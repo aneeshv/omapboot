@@ -209,7 +209,8 @@ void aboot(unsigned *info)
 	if (n) {
 		serial_puts("*** IO ERROR ***\n");
 	} else {
-		if (OMAP_TYPE_SEC == boot_ops->proc_ops->proc_get_type()) {
+		if (boot_ops->proc_ops->proc_get_type() ==
+			(char *)OMAP_TYPE_SEC) {
 			void *data = (void *) (CONFIG_ADDR_DOWNLOAD);
 			void *sign = (void *) (CONFIG_ADDR_DOWNLOAD +
 								len - 280);
@@ -227,7 +228,7 @@ void aboot(unsigned *info)
 			for (;;) ;
 		}
 
-		boot_image(cfg_machine_type, CONFIG_ADDR_DOWNLOAD, len);
+		do_booti("ram", NULL);
 		serial_puts("*** BOOT FAILED ***\n");
 	}
 

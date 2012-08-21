@@ -26,8 +26,6 @@
 * SUCH DAMAGE.
 */
 
-#include <config.h>
-
 #include <aboot/aboot.h>
 #include <aboot/io.h>
 
@@ -53,7 +51,7 @@ static struct partition partitions[] = {
 	{ "system", 512*1024 },
 	{ "cache", 256*1024 },
 	{ "userdata", 0},
-	{ 0, 0 },
+	{ NULL, 0 },
 };
 
 static u8 device = DEVICE_EMMC;

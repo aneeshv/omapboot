@@ -29,28 +29,7 @@
 #include <aboot/aboot.h>
 #include <aboot/io.h>
 
-#if defined CONFIG_IS_OMAP4
-#include <omap4/hw.h>
-#elif defined CONFIG_IS_OMAP5
-#include <omap5/hw.h>
-#endif
-
-#define OFF_RBR		0x00
-#define OFF_THR		0x00
-#define OFF_DLL		0x00
-#define OFF_IER		0x04
-#define OFF_DLM		0x04
-#define OFF_FCR		0x08
-#define OFF_IIR		0x08
-#define OFF_LCR		0x0C
-#define OFF_MCR		0x10
-#define OFF_LSR		0x14
-#define OFF_MSR		0x18
-#define OFF_SCR		0x1C
-#define OFF_MDR1	0x20
-
-#define WR(val, addr) writeb(val, CONFIG_SERIAL_BASE + OFF_##addr)
-#define RD(addr) readb(CONFIG_SERIAL_BASE + OFF_##addr)
+#include <common/serial.h>
 
 void serial_init(void)
 {
