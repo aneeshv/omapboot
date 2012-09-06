@@ -63,6 +63,24 @@ static struct partition * omap5uevm_get_partition(void)
 	return partitions;
 }
 
+static void omap5uevm_signal_int_reg_init
+				(struct proc_specific_functions *proc_ops)
+{
+	/* configure smart io */
+	configure_smartio(NULL);
+
+#ifdef CONFIG_USE_CH_RAM_CONFIG
+	if (proc_ops->proc_get_proc_id) {
+		if (proc_ops->proc_get_proc_id() > OMAP_5432_ES1_DOT_0)
+			return;
+	}
+#endif
+
+	/* configure ddr io */
+	omap5_ddrio_init(NULL);
+}
+
+
 static void omap5uevm_mux_init(void)
 {
 	/* core padconf essential */
@@ -92,12 +110,6 @@ static void omap5uevm_mux_init(void)
 
 	/* push button (GPIO 83) for fastboot mode */
 	setup_core(CONTROL_PADCONF_HSI2_ACDATA, (IEN | M6));
-}
-
-static void omap5uevm_smartio_init(void)
-{
-	/* configure smart io */
-	configure_smartio(NULL);
 }
 
 /* Use CH (configuration header) to do the settings */
@@ -140,9 +152,6 @@ static u8 omap5uevm_get_flash_slot(void)
 
 static void omap5uevm_prcm_init(void)
 {
-	/* Work around to make sure EMIF 2 is in good health*/
-	writel(0x0100040D, EMIF2_SDRAM_REFRESH_CONTROL);
-	writel(0x0000040D, EMIF2_SDRAM_REFRESH_CONTROL);
 	prcm_init();
 }
 
@@ -168,49 +177,51 @@ static int omap5uevm_configure_pwm_mode(void)
 	return ret;
 }
 
-static struct storage_specific_functions *omap5uevm_storage_init(void)
-{
-	int ret;
-	struct storage_specific_functions *storage_ops;
-	storage_ops = init_rom_mmc_funcs(omap5uevm_get_flash_slot());
-	if (!storage_ops) {
-		printf("Unable to get rom mmc functions\n");
-		return NULL;
-	}
-	ret = storage_ops->init();
-	if (ret) {
-		printf("Unable to init storage device\n");
-		return NULL;
-	}
-	return storage_ops;
-}
-
-static int omap5uevm_set_flash_slot(u8 dev)
+static int omap5uevm_storage_init(u8 dev,
+				struct storage_specific_functions *storage_ops)
 {
 	int ret = 0;
+
+	ret = storage_ops->init(dev);
+	if (ret)
+		printf("Unable to init storage device\n");
+
+	return ret;
+}
+
+static int omap5uevm_set_flash_slot(u8 dev,
+				struct storage_specific_functions *storage_ops)
+{
+	int ret = 0;
+	char buf[12];
 	u8 prev_dev = device;
+
 	switch (dev) {
 	case DEVICE_SDCARD:
 	case DEVICE_EMMC:
 		device = dev;
-		if (!omap5uevm_storage_init()) {
-			printf("Unable to set flash slot: %d\n", dev);
-			ret = -1;
+		ret = omap5uevm_storage_init(dev, storage_ops);
+		if (ret != 0) {
+			dev_to_devstr(dev, buf);
+			printf("Unable to set flash slot: %s\n", buf);
 			device = prev_dev;
-		} else
-			break;
+		}
+
+		break;
 	default:
 		printf("Unable to set flash slot: %d\n", dev);
 		ret = -1;
 	}
+
 	return ret;
 }
+
 
 static struct board_specific_functions omap5uevm_funcs = {
 	.board_get_flash_slot = omap5uevm_get_flash_slot,
 	.board_set_flash_slot = omap5uevm_set_flash_slot,
+	.board_signal_integrity_reg_init = omap5uevm_signal_int_reg_init,
 	.board_mux_init = omap5uevm_mux_init,
-	.board_smartio_init = omap5uevm_smartio_init,
 	.board_user_fastboot_request = omap5uevm_check_fastboot,
 	.board_late_init = omap5uevm_late_init,
 	.board_get_part_tbl = omap5uevm_get_partition,

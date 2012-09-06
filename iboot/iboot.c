@@ -71,8 +71,12 @@ void iboot(unsigned *info)
 	if (boot_ops->board_ops->board_mux_init)
 		boot_ops->board_ops->board_mux_init();
 
-	if (boot_ops->board_ops->board_smartio_init)
-		boot_ops->board_ops->board_smartio_init();
+	if (boot_ops->board_ops->board_ddr_init)
+		boot_ops->board_ops->board_ddr_init(boot_ops->proc_ops);
+
+	if (boot_ops->board_ops->board_signal_integrity_reg_init)
+		boot_ops->board_ops->board_signal_integrity_reg_init
+							(boot_ops->proc_ops);
 
 	ldelay(100);
 
@@ -81,9 +85,6 @@ void iboot(unsigned *info)
 
 	if(boot_ops->board_ops->board_prcm_init)
 		boot_ops->board_ops->board_prcm_init();
-
-	if (boot_ops->board_ops->board_ddr_init)
-		boot_ops->board_ops->board_ddr_init(boot_ops->proc_ops);
 
 	init_memory_alloc();
 
@@ -114,13 +115,24 @@ void iboot(unsigned *info)
 
 	usb_write(&usb, &MSG, 4);
 
-	if (boot_ops->board_ops->board_storage_init)
-		boot_ops->storage_ops =
-			boot_ops->board_ops->board_storage_init();
+	if (!boot_ops->board_ops->board_get_flash_slot)
+		goto fail;
+
+	boot_ops->storage_ops =
+		init_rom_mmc_funcs(boot_ops->board_ops->board_get_flash_slot());
 	if (!boot_ops->storage_ops) {
-		printf("Storage driver init failed\n");
+		printf("Unable to init rom mmc functions\n");
 		goto fail;
 	}
+
+	if (boot_ops->board_ops->board_storage_init)
+		ret = boot_ops->board_ops->board_storage_init
+			(boot_ops->board_ops->board_get_flash_slot(),
+							boot_ops->storage_ops);
+		if (ret != 0) {
+			printf("Storage driver init failed\n");
+			goto fail;
+		}
 
 	do_fastboot(boot_ops);
 

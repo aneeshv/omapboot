@@ -97,34 +97,8 @@ static int fastboot_tx_status(const char *buffer, unsigned int buffer_size)
 {
 	/* send response back to host */
 	usb_write(&usb, (void *)buffer, strlen(buffer));
+
 	return 0;
-}
-
-static void dev_to_devstr(u8 dev, char *devstr)
-{
-	switch (dev) {
-	case DEVICE_EMMC:
-		strcpy(devstr, "EMMC");
-		break;
-	case DEVICE_SDCARD:
-		strcpy(devstr, "SD");
-		break;
-	default:
-		strcpy(devstr, "Unknown");
-		break;
-	}
-}
-
-static int devstr_to_dev(const char *devstr, u8 *dev)
-{
-	int ret = 0;
-	if (!strcmp(devstr, "EMMC"))
-		*dev = DEVICE_EMMC;
-	else if (!strcmp(devstr, "SD"))
-		*dev = DEVICE_SDCARD;
-	else
-		ret = -1;
-	return ret;
 }
 
 static int *fastboot_alloc_mem(void)
@@ -216,17 +190,17 @@ static int fastboot_getvar(const char *rx_buffer, char *tx_buffer)
 		fastboot_tx_status(tx_buffer, strlen(tx_buffer));
 
 		strcpy(tx_buffer, "OKAY");
-	} else
-		printf("fastboot_getvar():unsupported variable\n");
+	} else {
+		DBG("fastboot_getvar():unsupported variable\n");
+		sprintf(tx_buffer, "FAILUnsupported Variable %s", rx_buffer);
+	}
 
 	fastboot_tx_status(tx_buffer, strlen(tx_buffer));
 
 	return 0;
 }
 
-static void fastboot_oem(struct fastboot_data *fb_data,
-			const char *cmd,
-			char *response)
+static int fastboot_oem(const char *cmd, char *response)
 {
 	int ret = -1;
 	u8 dev = 0;
@@ -234,37 +208,46 @@ static void fastboot_oem(struct fastboot_data *fb_data,
 	if (memcmp(cmd, "format", 6) == 0) {
 		ret = do_gpt_format(fb_data);
 		if (ret)
-			strcpy(response, "FAIL");
+			strcpy(response, "FAILGPT format failed");
 		else
 			strcpy(response, "OKAY");
+
 	} else if (memcmp(cmd, "unlock", 6) == 0) {
-		printf("\nfastboot oem unlock not implemented yet!\n");
-		strcpy(response, "FAILNot Implemented");
+		DBG("\nfastboot oem unlock not implemented yet!\n");
+		strcpy(response, "FAILoem unlock not implemented");
+
 	} else if (memcmp(cmd,  "set_flash_slot", 14) == 0) {
 		ret = devstr_to_dev(cmd + 15, &dev);
 		if (ret)
 			strcpy(response, "FAILNot Supported");
 		else {
 			if (fb_data->board_ops->board_set_flash_slot) {
-				if (fb_data->board_ops->
-						board_set_flash_slot(dev))
-					strcpy(response, "FAILNot Supported");
+				ret =
+				fb_data->board_ops->board_set_flash_slot(dev,
+							fb_data->storage_ops);
+				if (ret < 0)
+					strcpy(response, "FAILUnable to set "
+								"flash slot");
 				else
 					strcpy(response, "OKAY");
 			} else
-				strcpy(response, "FAILNot Supported");
+				strcpy(response, "FAILboard_set_flash_slot not "
+								"supported");
 		}
 	} else {
-		printf("\nfastboot: does not understand %s\n", cmd);
-		strcpy(response, "FAILUnknown command");
+		DBG("\nfastboot: does not understand %s\n", cmd);
+		sprintf(response, "FAILUnknown oem command %s", cmd);
 	}
+
+	fastboot_tx_status(response, strlen(response));
+
+	return ret;
 }
 
 void fastboot_flash_add_ptn(fastboot_ptentry *ptn, int count)
 {
 	if (count < MAX_PTN) {
 		memcpy(fb_data->fb_ptable + count, ptn, sizeof(*ptn));
-	count++;
 	}
 }
 
@@ -284,26 +267,15 @@ fastboot_ptentry *fastboot_flash_find_ptn(const char *name)
 	return NULL;
 }
 
-fastboot_ptentry *fastboot_flash_get_ptn(unsigned int n, int count)
-{
-	if (n < count)
-		return fb_data->fb_ptable + n;
-	else
-		return NULL;
-}
-
-static int download_image(void)
+static int download_image(char *dsize, char *response)
 {
 	int ret = 0;
 	int size_of_dsize = 0;
-	int count = 0;
-	char response[65];
 
-	size_of_dsize = strlen(fb_data->dsize);
-	count = size_of_dsize;
+	size_of_dsize = strlen(dsize);
 
 	fb_data->getsize =
-		get_downloadsize_from_string(size_of_dsize, fb_data->dsize);
+		get_downloadsize_from_string(size_of_dsize, dsize);
 
 	if (fb_data->getsize == 0) {
 		sprintf(response, "FAILinvalid data size %x",
@@ -344,6 +316,7 @@ out:
 	}
 
 	fastboot_tx_status(response, strlen(response));
+
 	return ret;
 }
 
@@ -361,7 +334,8 @@ static int flash_sparse_formatted_image(void)
 
 	strcpy(response, "OKAY");
 
-	if ((fb_data->sparse_header->total_blks * fb_data->sparse_header->blk_sz) > fb_data->e->length) {
+	if ((fb_data->sparse_header->total_blks *
+			fb_data->sparse_header->blk_sz) > fb_data->e->length) {
 		printf("Image size exceeds %d limit\n", fb_data->e->length);
 		sprintf(response, "FAILImage size exceeds limit %d",
 						(u32)fb_data->e->length);
@@ -370,8 +344,10 @@ static int flash_sparse_formatted_image(void)
 	}
 
 	if ((fb_data->sparse_header->major_version != 1) ||
-		(fb_data->sparse_header->file_hdr_sz != sizeof(sparse_header_t)) ||
-		(fb_data->sparse_header->chunk_hdr_sz != sizeof(chunk_header_t))) {
+		(fb_data->sparse_header->file_hdr_sz !=
+						sizeof(sparse_header_t)) ||
+		(fb_data->sparse_header->chunk_hdr_sz !=
+						sizeof(chunk_header_t))) {
 			printf("Invalid sparse format\n");
 			strcpy(response, "FAILINVALID sparse format");
 			ret = -1;
@@ -413,12 +389,14 @@ static int flash_sparse_formatted_image(void)
 		DBG("chunk_sz: 0x%x\n", chunk_header->chunk_sz);
 		DBG("total_sz: 0x%x\n", chunk_header->total_sz);
 
-		if (fb_data->sparse_header->chunk_hdr_sz > sizeof(chunk_header_t)) {
+		if (fb_data->sparse_header->chunk_hdr_sz >
+						sizeof(chunk_header_t)) {
 
 			/* Skip the remaining bytes in a header that is longer
 			than we	expected */
-			transfer_buffer += (fb_data->sparse_header->chunk_hdr_sz -
-						sizeof(chunk_header_t));
+			transfer_buffer +=
+					(fb_data->sparse_header->chunk_hdr_sz-
+							sizeof(chunk_header_t));
 		}
 
 		chunk_data_sz = (fb_data->sparse_header->blk_sz *
@@ -594,11 +572,13 @@ static u32 fastboot_get_boot_ptn(boot_img_hdr *hdr, char *response)
 out:
 	strcpy(response, "INFO");
 	fastboot_tx_status(response, strlen(response));
+
 	return ret;
 }
 
 static int fastboot_update_zimage(char *response)
 {
+	boot_img_hdr *hdr = NULL;
 	u8 *ramdisk_buffer;
 	u32 ramdisk_sector_start, ramdisk_sectors;
 	u32 kernel_sector_start, kernel_sectors;
@@ -615,7 +595,7 @@ static int fastboot_update_zimage(char *response)
 		goto out;
 	}
 
-	boot_img_hdr *hdr = (boot_img_hdr *) read_buffer;
+	hdr = (boot_img_hdr *) read_buffer;
 
 	hdr_sectors = fastboot_get_boot_ptn(hdr, response);
 	if (hdr_sectors <= 0) {
@@ -637,7 +617,8 @@ static int fastboot_update_zimage(char *response)
 	ramdisk_buffer += hdr_sectors *512;
 	if (fb_data->storage_ops->read(ramdisk_sector_start,
 		ramdisk_sectors, ramdisk_buffer)) {
-		sprintf(response, "FAILCannot read ramdisk from boot partition");
+		sprintf(response, "FAILCannot read ramdisk from boot "
+								"partition");
 		ret = -1;
 		goto out;
 	}
@@ -689,6 +670,7 @@ out:
 
 static int fastboot_update_ramdisk(char *response)
 {
+	boot_img_hdr *hdr = NULL;
 	u32 ramdisk_sector_start, ramdisk_sectors;
 	u32 hdr_sectors = 0;
 	u32 sectors_per_page = 0;
@@ -703,7 +685,7 @@ static int fastboot_update_ramdisk(char *response)
 		goto out;
 	}
 
-	boot_img_hdr *hdr = (boot_img_hdr *) read_buffer;
+	hdr = (boot_img_hdr *) read_buffer;
 
 	hdr_sectors = fastboot_get_boot_ptn(hdr, response);
 	if (hdr_sectors <= 0) {
@@ -856,6 +838,110 @@ static int erase_section(unsigned int start, u64 length)
 	return ret;
 }
 
+static int fastboot_flash(char *cmd, char *response)
+{
+	int ret = 0;
+
+	if ((memcmp(cmd, "zimage", 6) == 0) ||
+		(memcmp(cmd, "zImage", 6) == 0)) {
+		ret = fastboot_update_zimage(response);
+
+		return ret;
+
+	} else if (memcmp(cmd, "ramdisk", 7) == 0) {
+		ret = fastboot_update_ramdisk(response);
+
+		return ret;
+	}
+
+	fb_data->e = fastboot_flash_find_ptn(cmd);
+
+	if (fb_data->e == NULL) {
+		char ptn_name[20];
+		strncpy(ptn_name, cmd, strlen(cmd));
+
+		DBG("Partition: %s does not exist\n", ptn_name);
+		sprintf(response, "FAILpartition does not exist %s", ptn_name);
+		fastboot_tx_status(response, strlen(response));
+
+		return 0;
+
+	} else if (fb_data->getsize > fb_data->e->length) {
+		DBG("Image is too large for partition\n");
+		sprintf(response, "FAILimage is too large for partition");
+		fastboot_tx_status(response, strlen(response));
+
+		return 0;
+
+	} else
+		printf("writing to partition %s, begins at " \
+			"sector: %d and is %d long\n",
+			fb_data->e->name,
+			(int)fb_data->e->start,
+			(int)fb_data->e->length);
+
+	/* store the start address of the partition */
+	fb_data->sector = fb_data->e->start;
+
+	fb_data->sparse_header = (sparse_header_t *)transfer_buffer;
+
+	/*check if we have a sparse compressed image */
+	if (fb_data->sparse_header->magic == SPARSE_HEADER_MAGIC) {
+
+		ret = flash_sparse_formatted_image();
+		if (ret != 0)
+			return -1;
+		else
+			printf("Done flashing the sparse " \
+			"formatted image to %s\n", fb_data->e->name);
+	} else {
+		/* normal flashing case */
+		ret = flash_non_sparse_formatted_image();
+		if (ret != 0)
+			return -1;
+		else
+			printf("Done flashing the non-sparse " \
+			"formatted image to %s\n", fb_data->e->name);
+	}
+
+	return ret;
+}
+
+static int fastboot_boot(char *cmd, char *response)
+{
+	strcpy(response, "OKAY");
+	fastboot_tx_status(response, strlen(response));
+
+	usb_close(&usb);
+
+	printf("booting kernel...\n");
+	do_booti("ram", transfer_buffer);
+
+	return 0;
+}
+
+static int fastboot_erase(char *cmd, char *response)
+{
+	int ret = 0;
+
+	fb_data->e = fastboot_flash_find_ptn(cmd);
+	if (fb_data->e == NULL)
+		sprintf(response, "FAILPartition %s does not exist", cmd);
+	else {
+		ret = erase_section(fb_data->e->start, fb_data->e->length);
+		if (ret)
+			printf(response, "FAILUnable to "
+						"erase partition %s", cmd);
+
+		else
+			sprintf(response, "OKAY");
+	}
+
+	fastboot_tx_status(response, strlen(response));
+
+	return ret;
+}
+
 void do_fastboot(struct bootloader_ops *boot_ops)
 {
 	int ret = 0;
@@ -905,117 +991,21 @@ void do_fastboot(struct bootloader_ops *boot_ops)
 		}
 
 		if (memcmp(cmd, "getvar:", 7) == 0) {
-			strcpy(response, "OKAY");
-			fastboot_getvar(cmd + 7, response);
+			ret = fastboot_getvar(cmd + 7, response);
 		} else if (memcmp(cmd, "oem ", 4) == 0) {
-			fastboot_oem(fb_data, cmd + 4, response);
-			fastboot_tx_status(response, strlen(response));
+			ret = fastboot_oem(cmd + 4, response);
 		} else if (memcmp(cmd, "download:", 9) == 0) {
-
-			ret = 0;
-			fb_data->dsize = &cmd[10];
-			ret = download_image();
-			if (ret != 0)
-				goto fail;
-			else
-				printf("Finished downloading...\n");
-
+			ret = download_image(cmd + 9, response);
 		} else if (memcmp(cmd, "flash:", 6) == 0) {
-
-			ret = 0;
-
-			if (fb_data->getsize == 0)
-				goto fail;
-
-			if ((memcmp(cmd+6, "zimage", 6) == 0) ||
-				(memcmp(cmd+6, "zImage", 6) == 0)){
-				fastboot_update_zimage(response);
-				continue;
-			} else if (memcmp(cmd+6, "ramdisk", 7) == 0) {
-				fastboot_update_ramdisk(response);
-				continue;
-			}
-
-			fb_data->e = fastboot_flash_find_ptn(&cmd[6]);
-
-			if (fb_data->e == NULL) {
-				char ptn_name[20];
-				strncpy(ptn_name, cmd+6, cmdsize-6);
-
-				printf("Partition: %s does not exist\n",
-								ptn_name);
-				sprintf(response,
-					"FAILpartition does not exist");
-				fastboot_tx_status(response, strlen(response));
-				continue;
-
-			} else if (fb_data->getsize > fb_data->e->length) {
-				printf("Image is too large for partition\n");
-				sprintf(response, "FAILimage is too large for "
-								"partition");
-				fastboot_tx_status(response, strlen(response));
-				continue;
-
-			} else
-				printf("writing to partition %s, begins at "
-					"sector: %d and is %d long\n",
-					fb_data->e->name,
-					(int)fb_data->e->start,
-					(int)fb_data->e->length);
-
-			/* store the start address of the partition */
-			fb_data->sector = fb_data->e->start;
-
-			fb_data->sparse_header = (sparse_header_t *)transfer_buffer;
-
-			/*check if we have a sparse compressed image */
-			if (fb_data->sparse_header->magic == SPARSE_HEADER_MAGIC) {
-
-				ret = flash_sparse_formatted_image();
-				if (ret != 0)
-					goto fail;
-				else
-					printf("Done flashing the sparse "
-					"formatted image to %s\n", fb_data->e->name);
-			} else {
-				/* normal flashing case */
-				ret = flash_non_sparse_formatted_image();
-				if (ret != 0)
-					goto fail;
-				else
-					printf("Done flashing the non-sparse "
-					"formatted image to %s\n", fb_data->e->name);
-			}
-
+			ret = fastboot_flash(cmd + 6, response);
 		} else if (memcmp(cmd, "erase:", 6) == 0) {
-			ret = 0;
-			fb_data->e = fastboot_flash_find_ptn(&cmd[6]);
-			if (fb_data->e == NULL)
-				sprintf(response, "FAILPartition %s "
-					"does not exist", &cmd[6]);
-			else {
-				ret = erase_section(fb_data->e->start, fb_data->e->length);
-				if (ret)
-					sprintf(response, "FAILUnable to "
-					"erase partition %s", &cmd[6]);
-
-				else
-					sprintf(response, "OKAY");
-			}
-			fastboot_tx_status(response, strlen(response));
+			ret = fastboot_erase(cmd + 6, response);
+		} else if (memcmp(cmd, "boot", 4) == 0) {
+			ret = fastboot_boot(cmd + 4, response);
 		}
-		else if (memcmp(cmd, "boot", 4) == 0) {
 
-			strcpy(response, "OKAY");
-			fastboot_tx_status(response, strlen(response));
-
-			usb_close(&usb);
-
-			printf("booting kernel...\n");
-
-			do_booti("ram", transfer_buffer);
-
-		} /* "boot" if loop ends */
+		if (ret < 0)
+			goto fail;
 
 	} /* while(1) loop ends */
 

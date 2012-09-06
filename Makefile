@@ -138,11 +138,11 @@ COMMON_OBJS := 	crc32.o \
 		libc/raise.o \
 		libc/string.o \
 		trusted.o \
-		boot.o \
 		arch/common/misc.o \
 
 M_NAME := aboot
 M_LDS :=  arch/$(MACH)/$(M_NAME).lds
+M_MAP :=  $(OUT)/$(M_NAME).map
 M_BASE := $(ABOOT_TEXT_BASE)
 M_OBJS := arch/common/start.o
 M_OBJS += $(OMAP_COMMON_OBJS)
@@ -157,6 +157,7 @@ include build/target-executable.mk
 
 M_NAME := iboot
 M_LDS :=  arch/$(MACH)/$(M_NAME).lds
+M_MAP :=  $(OUT)/$(M_NAME).map
 M_BASE := $(IBOOT_TEXT_BASE)
 M_OBJS := iboot/start.o
 M_OBJS += $(OMAP_COMMON_OBJS)
@@ -171,6 +172,7 @@ include build/target-executable.mk
 
 M_NAME := eboot
 M_LDS :=  arch/$(MACH)/$(M_NAME).lds
+M_MAP :=  $(OUT)/$(M_NAME).map
 M_BASE := $(EBOOT_TEXT_BASE)
 M_OBJS := eboot/start.o
 M_OBJS += $(OMAP_COMMON_OBJS)

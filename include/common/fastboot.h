@@ -122,7 +122,6 @@ struct fastboot_data {
 	struct storage_specific_functions *storage_ops;
 	struct fastboot_ptentry *e;
 	struct fastboot_ptentry fb_ptable[MAX_PTN];
-	char *dsize;
 	u32 getsize;
 	u32 sector;
 	sparse_header_t *sparse_header;
@@ -134,7 +133,6 @@ void do_fastboot(struct bootloader_ops *board_funcs);
 char *get_serial_number(void);
 void fastboot_flash_reset_ptn(void);
 void fastboot_flash_add_ptn(fastboot_ptentry *ptn, int count);
-unsigned int fastboot_flash_get_ptn_count(void);
 fastboot_ptentry *fastboot_flash_find_ptn(const char *name);
 char *get_ptn_size(struct fastboot_data *fb_data, char *buf, const char *ptn) ;
 
@@ -144,7 +142,6 @@ static inline void do_fastboot(struct bootloader_ops *board_funcs) { return; };
 static inline char *get_serial_number(void) { return 0; };
 static inline void fastboot_flash_reset_ptn(void) { return; };
 static inline void fastboot_flash_add_ptn(fastboot_ptentry *ptn, int count) { return; };
-static inline unsigned int fastboot_flash_get_ptn_count(void) { return 0; };
 static inline fastboot_ptentry *fastboot_flash_find_ptn(const char *name) { return NULL; };
 
 static inline char *get_ptn_size(struct fastboot_data *fb_data, char *buf,
