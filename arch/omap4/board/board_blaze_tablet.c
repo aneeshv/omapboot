@@ -26,15 +26,16 @@
 * SUCH DAMAGE.
 */
 
-#include <aboot/aboot.h>
-#include <aboot/io.h>
+#include <aboot.h>
+#include <common.h>
+#include <io.h>
 
-#include <common/common_proc.h>
-#include <common/omap_rom.h>
-#include <common/usbboot_common.h>
+#include <common_proc.h>
+#include <omap_rom.h>
+#include <usbboot_common.h>
 
-#include <omap4/mux.h>
-#include <omap4/hw.h>
+#include <mux.h>
+#include <hw.h>
 
 static struct partition partitions[] = {
 	{ "-", 128 },
@@ -58,11 +59,6 @@ static u8 device = DEVICE_EMMC;
 static struct partition * blaze_tablet_get_partition(void)
 {
 	return partitions;
-}
-
-static void blaze_tablet_late_init(void)
-{
-	cfg_machine_type = 3429;
 }
 
 static void blaze_tablet_mux_init(void)
@@ -417,7 +413,7 @@ static int blaze_tablet_set_flash_slot(u8 dev,
 				struct storage_specific_functions *storage_ops)
 {
 	int ret = 0;
-	char buf[12];
+	char buf[DEV_STR_LENGTH];
 	u8 prev_dev = device;
 
 	switch (dev) {
@@ -444,7 +440,6 @@ static struct board_specific_functions blaze_tablet_funcs = {
 	.board_get_flash_slot = blaze_tablet_get_flash_slot,
 	.board_set_flash_slot = blaze_tablet_set_flash_slot,
 	.board_user_fastboot_request = blaze_tablet_check_fastboot,
-	.board_late_init = blaze_tablet_late_init,
 	.board_get_part_tbl = blaze_tablet_get_partition,
 	.board_ddr_init = blaze_tablet_ddr_init,
 	.board_mux_init = blaze_tablet_mux_init,

@@ -26,11 +26,11 @@
 * SUCH DAMAGE.
 */
 
-#include <aboot/aboot.h>
-#include <common/common_proc.h>
-#include <aboot/io.h>
-#include <omap5/hw.h>
-#include <omap5/clock.h>
+#include <aboot.h>
+#include <common_proc.h>
+#include <io.h>
+#include <hw.h>
+#include <clock.h>
 
 typedef struct dpll_param dpll_param;
 
@@ -431,11 +431,11 @@ void prcm_init(void)
 	/* Configure ABE DPLL and LOCK it */
 	configure_abe_dpll(&abe_dpll_params);
 
+#ifndef CONFIG_USE_CH_RAM_CONFIG
 	/* Configure EMIF controller */
 	setup_emif_config();
 
 	/* Put EMIF clock domain in sw wakeup mode */
-#ifndef CONFIG_USE_CH_RAM_CONFIG
 	writel(0x00000002, CM_EMIF_CLKSTCTRL);
 #endif
 

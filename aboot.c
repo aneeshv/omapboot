@@ -26,19 +26,14 @@
  * SUCH DAMAGE.
  */
 
-#include <version.h>
-#include <aboot/aboot.h>
-#include <aboot/io.h>
+#include <aboot.h>
+#include <io.h>
 
-#if defined CONFIG_IS_OMAP4
-#include <omap4/mux.h>
-#include <omap4/hw.h>
-#elif defined CONFIG_IS_OMAP5
-#include <omap5/hw.h>
-#endif
+#include <mux.h>
+#include <hw.h>
 
-#include <common/omap_rom.h>
-#include <common/usbboot_common.h>
+#include <omap_rom.h>
+#include <usbboot_common.h>
 
 #define WITH_MEMORY_TEST	0
 #define WITH_FLASH_BOOT		0
@@ -68,16 +63,10 @@ void memtest(void *x, unsigned count) {
 #endif
 
 static unsigned MSG = 0xaabbccdd;
-
-struct usb usb;
-
-unsigned cfg_machine_type = CONFIG_BOARD_MACH_TYPE;
-
 u32 public_rom_base;
 
 __attribute__((__section__(".mram")))
 static struct bootloader_ops boot_operations;
-struct bootloader_ops *boot_ops = &boot_operations;
 
 unsigned call_trusted(unsigned appid, unsigned procid, unsigned flag, void *args);
 
@@ -109,24 +98,24 @@ static int load_from_mmc(struct storage_specific_functions *storage_ops,
 }
 #endif
 
-static int load_from_usb(unsigned *_len)
+static int load_from_usb(unsigned *_len, struct usb *usb)
 {
 	unsigned len, n;
 	enable_irqs();
 
-	if (usb_open(&usb))
+	if (usb_open(usb))
 		return -1;
 
-	usb_queue_read(&usb, &len, 4);
-	usb_write(&usb, &MSG, 4);
-	n = usb_wait_read(&usb);
+	usb_queue_read(usb, &len, 4);
+	usb_write(usb, &MSG, 4);
+	n = usb_wait_read(usb);
 	if (n)
 		return -1;
 
-	if (usb_read(&usb, (void*) CONFIG_ADDR_DOWNLOAD, len))
+	if (usb_read(usb, (void*) CONFIG_ADDR_DOWNLOAD, len))
 		return -1;
 
-	usb_close(&usb);
+	usb_close(usb);
 
 	disable_irqs();
 	*_len = len;
@@ -137,6 +126,8 @@ void aboot(unsigned *info)
 {
 	unsigned n, len;
 	int ret = 0;
+	struct usb usb;
+	struct bootloader_ops *boot_ops = &boot_operations;
 
 	boot_ops->board_ops = init_board_funcs();
 	boot_ops->proc_ops = init_processor_id_funcs();
@@ -173,7 +164,8 @@ void aboot(unsigned *info)
 		goto fail;
 
 	boot_ops->storage_ops =
-		init_rom_mmc_funcs(boot_ops->board_ops->board_get_flash_slot());
+		init_rom_mmc_funcs(boot_ops->proc_ops->proc_get_proc_id(),
+				boot_ops->board_ops->board_get_flash_slot());
 	if (!boot_ops->storage_ops) {
 		printf("Unable to init rom mmc functions\n");
 		goto fail;
@@ -196,7 +188,7 @@ void aboot(unsigned *info)
 #endif
 
 #if !WITH_FLASH_BOOT
-	n = load_from_usb(&len);
+	n = load_from_usb(&len, &usb);
 #else
 	unsigned bootdevice;
 
@@ -209,7 +201,7 @@ void aboot(unsigned *info)
 	switch (bootdevice) {
 	case 0x45: /* USB */
 		serial_puts("boot device: USB\n\n");
-		n = load_from_usb(&len);
+		n = load_from_usb(&len, &usb);
 		break;
 	case 0x05:
 	case 0x06:
@@ -244,7 +236,7 @@ void aboot(unsigned *info)
 			for (;;) ;
 		}
 
-		do_booti("ram", NULL);
+		do_booti(boot_ops, "ram", NULL, &usb);
 		serial_puts("*** BOOT FAILED ***\n");
 	}
 

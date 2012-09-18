@@ -26,15 +26,14 @@
  * SUCH DAMAGE.
  */
 
-#include <aboot/aboot.h>
-#include <aboot/bootimg.h>
-#include <aboot/common.h>
-#include <libc/string.h>
-#include <common/omap_rom.h>
-#include <common/fastboot.h>
-#include <common/boot_settings.h>
-#include <common/device_tree.h>
-#include "version.h"
+#include <aboot.h>
+#include <bootimg.h>
+#include <common.h>
+#include <string.h>
+#include <omap_rom.h>
+#include <fastboot.h>
+#include <boot_settings.h>
+#include <device_tree.h>
 
 #ifdef DEBUG
 #define DBG(x...) printf(x)
@@ -54,11 +53,10 @@
 #define EXTENDED_CMDLINE	""
 #endif
 
-struct usb usb;
-
 #if defined CONFIG_OMAP4_ANDROID_CMD_LINE || \
 	defined CONFIG_OMAP5_ANDROID_CMD_LINE
-static u32 setup_atag(boot_img_hdr *hdr, u32 *atag)
+static u32 setup_atag(struct bootloader_ops *boot_ops, boot_img_hdr *hdr,
+								u32 *atag)
 {
 	u32 size;
 	u32 rev;
@@ -82,10 +80,10 @@ static u32 setup_atag(boot_img_hdr *hdr, u32 *atag)
 	*(atag++) = MEMORY_SIZE;
 	*(atag++) = MEMORY_BASE;
 
-	if (boot_ops->proc_ops->proc_get_board_rev) {
+	if (boot_ops->board_ops->board_get_board_rev) {
 		*(atag++) = 3;
 		*(atag++) = _REV;
-		rev = boot_ops->proc_ops->proc_get_board_rev();
+		rev = boot_ops->board_ops->board_get_board_rev();
 		*(atag++) = rev;
 	}
 
@@ -110,14 +108,15 @@ _none:
 	return atag - atag_start;
 }
 
-static void boot_settings(boot_img_hdr *hdr, u32 atag)
+static void boot_settings(struct bootloader_ops *boot_ops, boot_img_hdr *hdr,
+								u32 atag)
 {
-	char temp_cmdline[512] = EXTENDED_CMDLINE;
 	char serial_str[64];
 	int serial_len;
 	u32 atag_size, boot_len;
 	char aboot_version_string[64];
 	char boot_str[64];
+	char temp_cmdline[512] = EXTENDED_CMDLINE;
 
 	serial_len = sprintf(serial_str, " androidboot.serialno=%s",
 		boot_ops->proc_ops->proc_get_serial_num());
@@ -135,7 +134,7 @@ static void boot_settings(boot_img_hdr *hdr, u32 atag)
 			strlen((const char *)hdr->cmdline) + 1))
 		strcat((char *)hdr->cmdline, boot_str);
 
-	atag_size = setup_atag(hdr, (u32 *)atag);
+	atag_size = setup_atag(boot_ops, hdr, (u32 *)atag);
 
 	return;
 }
@@ -168,7 +167,8 @@ static void bootimg_print_image_hdr(boot_img_hdr *hdr)
 	return;
 }
 
-int do_booti(char *info, void *download_addr)
+int do_booti(struct bootloader_ops *boot_ops, char *info, void *download_addr,
+								struct usb *usb)
 {
 	boot_img_hdr *hdr;
 	u32 addr;
@@ -178,10 +178,11 @@ int do_booti(char *info, void *download_addr)
 	u64 num_sectors = 0;
 	int sector_sz = 0;
 	int ret = 0;
-	unsigned dbt_addr = ATAGS_ARGS;
+	unsigned dbt_addr = CONFIG_ADDR_ATAGS;
+	unsigned cfg_machine_type = CONFIG_BOARD_MACH_TYPE;
 	void (*theKernel)(int zero, int arch, void *);
 
-	if (!(strcmp(info, "mmc")))
+	if (!(strcmp(info, "storage")))
 		boot_from_mmc = 1;
 
 	if (download_addr != NULL)
@@ -199,7 +200,7 @@ int do_booti(char *info, void *download_addr)
 		if (ret != 0)
 			goto fail;
 
-		dbt_addr = load_dev_tree(boot_ops);
+		dbt_addr = load_dev_tree(boot_ops, dbt_addr);
 		if (dbt_addr < 0)
 			goto fail;
 
@@ -291,7 +292,7 @@ int do_booti(char *info, void *download_addr)
 
 #if defined CONFIG_OMAP4_ANDROID_CMD_LINE || \
 	defined CONFIG_OMAP5_ANDROID_CMD_LINE
-	boot_settings(&hdr[0], ATAGS_ARGS);
+	boot_settings(boot_ops, &hdr[0], CONFIG_ADDR_ATAGS);
 #endif
 
 	theKernel = (void (*)(int, int, void *))(hdr->kernel_addr);
@@ -300,7 +301,7 @@ int do_booti(char *info, void *download_addr)
 	theKernel(0, cfg_machine_type, (void *)dbt_addr);
 
 fail:
-	usb_init(&usb);
-	do_fastboot(boot_ops);
+	usb_init(usb);
+	do_fastboot(boot_ops, usb);
 	return 0;
 }

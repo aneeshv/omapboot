@@ -29,14 +29,15 @@
 * SUCH DAMAGE.
 */
 
-#include <aboot/aboot.h>
-#include <aboot/io.h>
+#include <aboot.h>
+#include <common.h>
+#include <io.h>
 
-#include <common/common_proc.h>
-#include <common/fastboot.h>
-#include <common/omap_rom.h>
-#include <common/usbboot_common.h>
-#include <common/alloc.h>
+#include <common_proc.h>
+#include <fastboot.h>
+#include <omap_rom.h>
+#include <usbboot_common.h>
+#include <alloc.h>
 
 #ifdef DEBUG
 #define DBG(x...) printf(x)
@@ -44,20 +45,18 @@
 #define DBG(x...)
 #endif /* DEBUG */
 
-struct usb usb;
-
-unsigned cfg_machine_type = CONFIG_BOARD_MACH_TYPE;
-
 u32 public_rom_base;
 
 __attribute__((__section__(".mram")))
 static struct bootloader_ops boot_operations;
-struct bootloader_ops* boot_ops = &boot_operations;
 
 void eboot(unsigned *info)
 {
 	int ret = 0;
 	unsigned bootdevice = -1;
+	char buf[DEV_STR_LENGTH];
+	struct usb usb;
+	struct bootloader_ops *boot_ops = &boot_operations;
 
 	boot_ops->board_ops = init_board_funcs();
 	boot_ops->proc_ops = init_processor_id_funcs();
@@ -120,7 +119,8 @@ void eboot(unsigned *info)
 		goto fail;
 
 	boot_ops->storage_ops =
-		init_rom_mmc_funcs(boot_ops->board_ops->board_get_flash_slot());
+		init_rom_mmc_funcs(boot_ops->proc_ops->proc_get_proc_id(),
+				boot_ops->board_ops->board_get_flash_slot());
 	if (!boot_ops->storage_ops) {
 		printf("Unable to init rom mmc functions\n");
 		goto fail;
@@ -128,50 +128,32 @@ void eboot(unsigned *info)
 
 	if (info)
 		bootdevice = info[2] & 0xFF;
+	else
+		goto fail;
 
-	switch (bootdevice) {
-	case 0x05:
-		if (boot_ops->board_ops->board_set_flash_slot)
-			ret = boot_ops->board_ops->board_set_flash_slot
+	if (boot_ops->board_ops->board_set_flash_slot)
+		ret = boot_ops->board_ops->board_set_flash_slot
 					(bootdevice, boot_ops->storage_ops);
-			if (ret != 0) {
-				DBG("Storage driver init failed\n");
-				goto fail;
-			}
+		if (ret != 0) {
+			DBG("Storage driver init failed\n");
+			goto fail;
+		}
 
-		if (boot_ops->board_ops->board_user_fastboot_request)
-			if (boot_ops->board_ops->board_user_fastboot_request())
-				goto fastboot;
+	dev_to_devstr(bootdevice, buf);
+	printf("sram: boot device: %s\n", buf);
 
-		serial_puts("boot device: MMC1\n");
-		do_booti("mmc", NULL);
-		break;
-	case 0x06:
-	case 0x07:
-		if (boot_ops->board_ops->board_set_flash_slot)
-			ret = boot_ops->board_ops->board_set_flash_slot
-					(bootdevice, boot_ops->storage_ops);
-			if (ret != 0) {
-				DBG("Storage driver init failed\n");
-				goto fail;
-			}
+	if (boot_ops->board_ops->board_user_fastboot_request)
+		if (boot_ops->board_ops->board_user_fastboot_request())
+			goto fastboot;
 
-		if (boot_ops->board_ops->board_user_fastboot_request)
-			if (boot_ops->board_ops->board_user_fastboot_request())
-				goto fastboot;
-
-		serial_puts("boot device: MMC2\n");
-		do_booti("mmc", NULL);
-		break;
-	default:
-		serial_puts("boot device: unknown\n");
-	}
+	do_booti(boot_ops, "storage", NULL, &usb);
 
 fastboot:
 	usb_init(&usb);
-	do_fastboot(boot_ops);
+	do_fastboot(boot_ops, &usb);
 
 fail:
+	printf("boot failed\n");
 	while (1)
 		;
 }

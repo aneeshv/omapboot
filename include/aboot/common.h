@@ -29,7 +29,9 @@
 #ifndef _COMMON_H_
 #define _COMMON_H_
 
-#include <aboot/types.h>
+#include <types.h>
+
+#define DEV_STR_LENGTH	8
 
 unsigned long crc32(unsigned long crc, const unsigned char *buf,
 						unsigned int len);

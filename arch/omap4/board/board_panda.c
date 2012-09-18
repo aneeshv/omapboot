@@ -30,15 +30,16 @@
  */
 
 
-#include <aboot/aboot.h>
-#include <aboot/io.h>
+#include <aboot.h>
+#include <common.h>
+#include <io.h>
 
-#include <common/common_proc.h>
-#include <common/omap_rom.h>
-#include <common/usbboot_common.h>
+#include <common_proc.h>
+#include <omap_rom.h>
+#include <usbboot_common.h>
 
-#include <omap4/mux.h>
-#include <omap4/hw.h>
+#include <mux.h>
+#include <hw.h>
 
 static struct partition partitions[] = {
 	{ "-", 128 },
@@ -56,11 +57,6 @@ static struct partition partitions[] = {
 static struct partition * panda_get_partition(void)
 {
 	return partitions;
-}
-
-static void panda_late_init(void)
-{
-	cfg_machine_type = 3429;
 }
 
 static void panda_mux_init(void)
@@ -354,7 +350,7 @@ static int panda_set_flash_slot(u8 dev,
 				struct storage_specific_functions *storage_ops)
 {
 	int ret = 0;
-	char buf[12];
+	char buf[DEV_STR_LENGTH];
 
 	if (dev == DEVICE_SDCARD) {
 		ret = panda_storage_init(dev, storage_ops);
@@ -418,7 +414,6 @@ static struct board_specific_functions panda_funcs = {
 	.board_mux_init = panda_mux_init,
 	.board_ddr_init = panda_ddr_init,
 	.board_user_fastboot_request = panda_check_fastboot,
-	.board_late_init = panda_late_init,
 	.board_get_part_tbl = panda_get_partition,
 	.board_scale_vcores = panda_scale_cores,
 	.board_gpmc_init = panda_gpmc_init,

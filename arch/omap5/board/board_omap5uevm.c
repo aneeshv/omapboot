@@ -26,16 +26,17 @@
 * SUCH DAMAGE.
 */
 
-#include <aboot/aboot.h>
-#include <aboot/io.h>
+#include <aboot.h>
+#include <common.h>
+#include <io.h>
 
-#include <common/common_proc.h>
-#include <common/omap_rom.h>
-#include <common/usbboot_common.h>
+#include <common_proc.h>
+#include <omap_rom.h>
+#include <usbboot_common.h>
 
-#include <omap5/hw.h>
-#include <omap5/mux.h>
-#include <omap5/smartio.h>
+#include <hw.h>
+#include <mux.h>
+#include <smartio.h>
 
 #define FASTBOOT_BUTTON_GPIO	83
 
@@ -125,12 +126,6 @@ static void omap5uevm_scale_cores(void)
 	scale_vcores();
 }
 
-static void omap5uevm_gpmc_init(void)
-{
-	/* Use default OMAP gpmc init function */
-	gpmc_init();
-}
-
 static int omap5uevm_check_fastboot(void)
 {
 	if (!gpio_read(FASTBOOT_BUTTON_GPIO)) {
@@ -193,7 +188,7 @@ static int omap5uevm_set_flash_slot(u8 dev,
 				struct storage_specific_functions *storage_ops)
 {
 	int ret = 0;
-	char buf[12];
+	char buf[DEV_STR_LENGTH];
 	u8 prev_dev = device;
 
 	switch (dev) {
@@ -215,7 +210,10 @@ static int omap5uevm_set_flash_slot(u8 dev,
 
 	return ret;
 }
-
+static u32 omap5uevm_get_board_rev(void)
+{
+	return 0xff;
+}
 
 static struct board_specific_functions omap5uevm_funcs = {
 	.board_get_flash_slot = omap5uevm_get_flash_slot,
@@ -227,10 +225,10 @@ static struct board_specific_functions omap5uevm_funcs = {
 	.board_get_part_tbl = omap5uevm_get_partition,
 	.board_prcm_init = omap5uevm_prcm_init,
 	.board_scale_vcores = omap5uevm_scale_cores,
-	.board_gpmc_init = omap5uevm_gpmc_init,
 	.board_storage_init = omap5uevm_storage_init,
 	.board_read_sw_revision = omap5uevm_read_sw_revision,
 	.board_configure_pwm_mode = omap5uevm_configure_pwm_mode,
+	.board_get_board_rev = omap5uevm_get_board_rev,
 };
 
 void* init_board_funcs(void)

@@ -29,7 +29,7 @@
 #ifndef __DEVICE_TREE_H__
 #define __DEVICE_TREE_H__
 
-#include <common/usbboot_common.h>
+#include <usbboot_common.h>
 
 #define ENVIRO_MAGIC "ANDROID_ENV!"
 #define ENVIRO_MAGIC_SIZE 12
@@ -66,6 +66,6 @@ struct enviro_img_hdr
     unsigned id[8]; /* timestamp / checksum / sha1 / etc */
 };
 
-u32 load_dev_tree(struct bootloader_ops *boot_ops);
+u32 load_dev_tree(struct bootloader_ops *boot_ops, u32 atag_load_addr);
 
 #endif

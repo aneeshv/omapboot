@@ -29,7 +29,7 @@
 #ifndef _USBBOOT_COMMON_H_
 #define _USBBOOT_COMMON_H_
 
-#include <aboot/types.h>
+#include <types.h>
 #include <version.h>
 
 #define CEIL(a, b) (((a) / (b)) + ((a % b) > 0 ? 1 : 0))
@@ -50,7 +50,6 @@ struct proc_specific_functions {
 	char* (*proc_get_version)(void);
 	int (*proc_get_proc_id)(void);
 	void (*proc_check_lpddr2_temp)(void);
-	u32 (*proc_get_board_rev)(void);
 };
 
 struct storage_specific_functions {
@@ -84,6 +83,7 @@ struct board_specific_functions {
 	int (*board_pmic_disable)(void);
 	int (*board_read_sw_revision)(void);
 	int (*board_configure_pwm_mode)(void);
+	u32 (*board_get_board_rev)(void);
 };
 
 struct bootloader_ops {
@@ -101,7 +101,7 @@ unsigned long crc32(unsigned long crc, const unsigned char *buf,
 int get_downloadsize_from_string(int count, char *string);
 
 /* Storage drivers function inits */
-struct storage_specific_functions *init_rom_mmc_funcs(u8 device);
+struct storage_specific_functions *init_rom_mmc_funcs(int proc_id, u8 device);
 
 
 #endif

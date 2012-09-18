@@ -26,19 +26,25 @@
 * SUCH DAMAGE.
 */
 
-#include <libc/string.h>
+#include <string.h>
 
-#include <aboot/bootimg.h>
+#include <bootimg.h>
 
-#include <common/boot_settings.h>
-#include <common/device_tree.h>
-#include <common/fastboot.h>
-#include <common/alloc.h>
+#include <boot_settings.h>
+#include <device_tree.h>
+#include <fastboot.h>
+#include <alloc.h>
+
+#ifdef DEBUG
+#define DBG(x...) printf(x)
+#else
+#define DBG(x...)
+#endif /* DEBUG */
 
 struct device_tree_data {
 	struct fastboot_ptentry *pte;
 	int dev_tree_sz;
-	int dev_tree_load_addr;
+	u32 dev_tree_load_addr;
 	int page_size;
 };
 
@@ -110,14 +116,14 @@ static int find_dev_tree(struct bootloader_ops *boot_ops)
 		ret = boot_ops->storage_ops->read(pte->start, num_sectors,
 							(void *) env_hdr);
 		if (ret != 0) {
-			printf("%s: failed to read enviroment header\n",
+			DBG("%s: failed to read enviroment header\n",
 				__func__);
 			goto out;
 		}
 
 		ret = memcmp(env_hdr->magic, ENVIRO_MAGIC, ENVIRO_MAGIC_SIZE);
 		if (ret != 0) {
-			printf("%s: bad enviroment magic\n", __func__);
+			DBG("%s: bad enviroment magic\n", __func__);
 			goto out;
 		}
 
@@ -141,13 +147,13 @@ static int find_dev_tree(struct bootloader_ops *boot_ops)
 		ret = boot_ops->storage_ops->read(pte->start, num_sectors,
 							(void *) boot_hdr);
 		if (ret != 0) {
-			printf("booti: failed to read bootimg header\n");
+			DBG("booti: failed to read bootimg header\n");
 			goto out;
 		}
 
 		ret = memcmp(boot_hdr->magic, BOOT_MAGIC, BOOT_MAGIC_SIZE);
 		if (ret != 0) {
-			printf("booti: bad boot image magic\n");
+			DBG("booti: bad boot image magic\n");
 			goto out;
 		}
 
@@ -181,7 +187,7 @@ out:
  *
  * Returns the load addres in memory of the device tree.
  **/
-u32 load_dev_tree(struct bootloader_ops *boot_ops)
+u32 load_dev_tree(struct bootloader_ops *boot_ops, u32 atag_load_addr)
 {
 	int ret = 0;
 	int sector;
@@ -191,8 +197,8 @@ u32 load_dev_tree(struct bootloader_ops *boot_ops)
 
 	ret = find_dev_tree(boot_ops);
 	if (ret < 0) {
-		printf("%s: Device tree not supported\n", __func__);
-		dt_data->dev_tree_load_addr = ATAGS_ARGS;
+		DBG("%s: Device tree not supported\n", __func__);
+		dt_data->dev_tree_load_addr = atag_load_addr;
 		goto out;
 	}
 

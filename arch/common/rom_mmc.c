@@ -28,21 +28,17 @@
 * SUCH DAMAGE.
 */
 
-#include <aboot/aboot.h>
-#include <aboot/io.h>
+#include <aboot.h>
+#include <io.h>
 
-#include <common/usbboot_common.h>
-#include <common/alloc.h>
-#include <common/omap_rom.h>
-#include <common/mmc.h>
+#include <usbboot_common.h>
+#include <alloc.h>
+#include <omap_rom.h>
+#include <mmc.h>
 
-#include <libc/string.h>
+#include <string.h>
 
-#if defined CONFIG_IS_OMAP4
-#include <omap4/hw.h>
-#elif defined CONFIG_IS_OMAP5
-#include <omap5/hw.h>
-#endif
+#include <hw.h>
 
 #ifdef DEBUG
 #define DBG(x...) printf(x)
@@ -413,21 +409,21 @@ static u64 get_mmc_total_sectors(void)
 }
 
 
-struct storage_specific_functions *init_rom_mmc_funcs(u8 device)
+struct storage_specific_functions *init_rom_mmc_funcs(int proc_id, u8 device)
 {
 	if (!((device == DEVICE_SDCARD) || (device == DEVICE_EMMC))) {
 		printf("unsupported mmc device\n");
 		return NULL;
 	}
 
-	if (boot_ops->proc_ops->proc_get_proc_id) {
+	if (proc_id) {
 		mmcd.rom_hal_mmchs_writedata =
 			API(&rom_hal_mmchs_writedata_addr
-			[boot_ops->proc_ops->proc_get_proc_id()]);
+			[proc_id]);
 
 		mmcd.rom_hal_mmchs_sendcommand =
 			API(&rom_hal_mmchs_sendcommand_addr
-			[boot_ops->proc_ops->proc_get_proc_id()]);
+			[proc_id]);
 	} else
 		return NULL;
 

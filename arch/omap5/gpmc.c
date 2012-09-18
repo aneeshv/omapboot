@@ -29,9 +29,10 @@
  * SUCH DAMAGE.
  */
 
-#include <aboot/aboot.h>
-#include <aboot/io.h>
-#include <omap5/hw.h>
+#include <aboot.h>
+#include <io.h>
+#include <hw.h>
+#include <common_proc.h>
 
 void gpmc_init(void)
 {
