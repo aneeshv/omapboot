@@ -26,64 +26,10 @@
  * SUCH DAMAGE.
  */
 
-#include <aboot.h>
-#include <io.h>
-#include <omap_rom.h>
-#include <string.h>
+#ifndef _SATA_H_
+#define _SATA_H_
 
-#define LOOP_MAX      2000
-u32 check_loop(u32 mask, u32 match, u32 addr)
-{
-	u32 i = 0, val;
-	while(1) {
-		++i;
-		val = readl(addr) & mask;
-		if (val == match)
-			return (1);
-		if (i == LOOP_MAX)
-			return (0);
-	}
-	return(0);
-}
+#define OMAP_SATA_PXCMD_OFFSET		(0x118)
+#define OMAP_SATA_PXCI_OFFSET		(0x138)
 
-void set_modify(u32 reg, u32 mask, u32 value)
-{
-	u32 read = readl(reg);
-	u32 reg_value = ((read & ~(mask)) | value);
-
-	writel(reg_value, reg);
-}
-
-void dev_to_devstr(u8 dev, char *devstr)
-{
-	switch (dev) {
-	case DEVICE_EMMC:
-		strcpy(devstr, "EMMC");
-		break;
-	case DEVICE_SDCARD:
-		strcpy(devstr, "SD");
-		break;
-	case DEVICE_SATA:
-		strcpy(devstr, "SATA");
-		break;
-	default:
-		strcpy(devstr, "Unknown");
-		break;
-	}
-}
-
-int devstr_to_dev(const char *devstr, u8 *dev)
-{
-	int ret = 0;
-
-	if (!strcmp(devstr, "EMMC"))
-		*dev = DEVICE_EMMC;
-	else if (!strcmp(devstr, "SD"))
-		*dev = DEVICE_SDCARD;
-	else if (!strcmp(devstr, "SATA"))
-		*dev = DEVICE_SATA;
-	else
-		ret = -1;
-
-	return ret;
-}
+#endif
