@@ -35,38 +35,9 @@
 #include <omap_rom.h>
 #include <usbboot_common.h>
 
-#define WITH_MEMORY_TEST	0
 #define WITH_FLASH_BOOT		0
 
-#if WITH_MEMORY_TEST
-void memtest(void *x, unsigned count) {
-	unsigned *w = x;
-	unsigned n;
-	count /= 4;
-
-	printf("memtest write - %d\n",count);
-	for (n = 0; n < count; n++) {
-		unsigned chk = 0xa5a5a5a5 ^ n;
-		w[n] = chk;
-	}
-	printf("memtest read\n");
-	for (n = 0; n < count; n++) {
-		unsigned chk = 0xa5a5a5a5 ^ n;
-		if (w[n] != chk) {
-			printf("ERROR @ %x (%x != %x)\n", 
-				(unsigned) (w+n), w[n], chk);
-			return;
-		}
-	}
-	printf("OK!\n");
-}
-#endif
-
 static unsigned MSG = 0xaabbccdd;
-u32 public_rom_base;
-
-__attribute__((__section__(".mram")))
-static struct bootloader_ops boot_operations;
 
 unsigned call_trusted(unsigned appid, unsigned procid, unsigned flag, void *args);
 
@@ -125,70 +96,21 @@ static int load_from_usb(unsigned *_len, struct usb *usb)
 void aboot(unsigned *info)
 {
 	unsigned n, len;
-	int ret = 0;
-	struct usb usb;
-	struct bootloader_ops *boot_ops = &boot_operations;
+	unsigned bootdevice = -1;
+	struct bootloader_ops *boot_ops;
 
-	boot_ops->board_ops = init_board_funcs();
-	boot_ops->proc_ops = init_processor_id_funcs();
-
-	if (boot_ops->proc_ops->proc_get_api_base)
-		public_rom_base = boot_ops->proc_ops->proc_get_api_base();
-
-	if (boot_ops->board_ops->board_mux_init)
-		boot_ops->board_ops->board_mux_init();
-
-	ldelay(100);
-
-	if (boot_ops->board_ops->board_scale_vcores)
-		boot_ops->board_ops->board_scale_vcores();
-
-	if(boot_ops->board_ops->board_prcm_init)
-		boot_ops->board_ops->board_prcm_init();
-
-	if (boot_ops->board_ops->board_ddr_init)
-		boot_ops->board_ops->board_ddr_init(boot_ops->proc_ops);
-
-	if (boot_ops->board_ops->board_gpmc_init)
-		boot_ops->board_ops->board_gpmc_init();
-
-	if (boot_ops->board_ops->board_late_init)
-		boot_ops->board_ops->board_late_init();
-
-	serial_init();
-
-	printf("%s\n", ABOOT_VERSION);
-	printf("Build Info: "__DATE__ " - " __TIME__ "\n");
-
-	if (!boot_ops->board_ops->board_get_flash_slot)
+	if (info)
+		bootdevice = info[2] & 0xFF;
+	else
 		goto fail;
 
-	boot_ops->storage_ops =
-		init_rom_mmc_funcs(boot_ops->proc_ops->proc_get_proc_id(),
-				boot_ops->board_ops->board_get_flash_slot());
-	if (!boot_ops->storage_ops) {
-		printf("Unable to init rom mmc functions\n");
+	boot_ops = boot_common(bootdevice);
+	if (!boot_ops)
 		goto fail;
-	}
 
-	if (boot_ops->board_ops->board_storage_init)
-		ret = boot_ops->board_ops->board_storage_init
-			(boot_ops->board_ops->board_get_flash_slot(),
-							boot_ops->storage_ops);
-		if (ret != 0) {
-			printf("Storage driver init failed\n");
-			goto fail;
-		}
-
-	/* printf("MSV=%08x\n",*((unsigned*) 0x4A00213C)); */
-
-#if WITH_MEMORY_TEST
-	memtest(0x82000000, 8*1024*1024);
-	memtest(0xA0208000, 8*1024*1024);
-#endif
 
 #if !WITH_FLASH_BOOT
-	n = load_from_usb(&len, &usb);
+	n = load_from_usb(&len, &boot_ops->usb);
 #else
 	unsigned bootdevice;
 
@@ -201,7 +123,7 @@ void aboot(unsigned *info)
 	switch (bootdevice) {
 	case 0x45: /* USB */
 		serial_puts("boot device: USB\n\n");
-		n = load_from_usb(&len, &usb);
+		n = load_from_usb(&len, &boot_ops->usb);
 		break;
 	case 0x05:
 	case 0x06:
@@ -236,7 +158,7 @@ void aboot(unsigned *info)
 			for (;;) ;
 		}
 
-		do_booti(boot_ops, "ram", NULL, &usb);
+		do_booti(boot_ops, "ram", NULL);
 		serial_puts("*** BOOT FAILED ***\n");
 	}
 

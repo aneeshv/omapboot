@@ -43,6 +43,8 @@
 #define CONFIG_RAM_VECTORS		0x4030D000
 #define CONFIG_STACK_TOP		0x4030D000
 
+#define CONFIG_ADDR_SBOOT		0x90000000
+
 /* MEMORY_SIZE : This define should be modified
 * in order to pass less memory to the kernel via ATAGS
 * For 2GB, MEMORY_SIZE = 0x80000000
@@ -69,7 +71,10 @@
 	#define MANUFACTURER_NAME	""
 	#define SERIALNO		""
 #endif
-
+/* Compile time Memory Tests
+#define DO_MEMORY_TEST_DURING_FIRST_STAGE_IN_EBOOT	1
+#define DO_MEMORY_TEST_DURING_FIRST_STAGE_IN_IBOOT	1
+*/
 #define CONFIG_OMAP5_ANDROID_CMD_LINE
 
 #define EXTENDED_CMDLINE        "earlyprintk ";

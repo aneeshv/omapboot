@@ -1,9 +1,6 @@
 /*
- * Copyright (C) 2011 The Android Open Source Project
- * All rights reserved.
- *
- * Copyright(c) 2012 Texas Instruments.
- * All rights reserved.
+ * Copyright (C) 2012, Texas Instruments, Inc.
+ * Texas Instruments, <www.ti.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,45 +26,64 @@
  * SUCH DAMAGE.
  */
 
-#define CONFIG_PANDA
+#define PRM_RSTCTRL                     0x4A307B00
+#define PRM_RSTCTRL_RESET_COLD_BIT      (1<<1)
 
-#define CONFIG_BOARD_MACH_TYPE		2791
-#define CONFIG_IS_OMAP4
+.text
+.globl _start
 
-#define CONFIG_BAUDRATE			115200
+_start:
+		/* obtain address of where _start was loaded */
+		adr r7, _start
+		adr r8, size
+		ldr r8, [r8]
 
-#define CONFIG_SERIAL_BASE		OMAP44XX_UART3
-#define CONFIG_SERIAL_CLK_HZ		48000000
+		/* image end (source) */
+		add r7, r8, r7
 
-#define CONFIG_ADDR_SBOOT		0x90000000
+		/* image start and end (destination) */
+		ldr r8, =_start
+		ldr r9, =__bss_end
 
-#define CONFIG_RAM_HANDLERS		0x4030D020
-#define CONFIG_RAM_VECTORS		0x4030D000
-#define CONFIG_STACK_TOP		0x4030D000
+copy:
+		ldr r6, [r7], #-4
+		str r6, [r9], #-4
+		cmp r9, r8
+		bne copy
 
-#define MEMORY_SIZE			0x40000000
-#define MEMORY_BASE			0x80000000
-#define CONFIG_ADDR_ATAGS		(MEMORY_BASE + 0x100)
-#define CONFIG_ADDR_KERNEL		(MEMORY_BASE + 0x8000)
-#define CONFIG_ADDR_RAMDISK		(MEMORY_BASE + 0x01000000)
-#define CONFIG_ADDR_DOWNLOAD		(MEMORY_BASE + 0x02000000)
+		ldr r8, =sboot
+		bx r8
+		b .
 
-#define CONFIG_FASTBOOT			/* enable FASTBOOT for PANDA */
+.global ldelay
+ldelay:
+       subs r0, r0, #1
+       bne ldelay
+       bx lr
 
-#ifdef CONFIG_FASTBOOT
-	#define PRODUCT_NAME		"panda"
-	#define FASTBOOT_VERSION	"0.5"
-	#define MANUFACTURER_NAME	"Texas Instruments"
-#else
-	#define PRODUCT_NAME		""
-	#define FASTBOOT_VERSION	""
-	#define MANUFACTURER_NAME	""
-#endif
+size:
+		.word __bss_end - _start
 
-#define CONFIG_OMAP4_ANDROID_CMD_LINE
+.global enable_irqs
+.global disable_irqs
 
-#define EXTENDED_CMDLINE	"mem=1024M@0x80000000 " \
-				"mem=512M@0xA0000000 " \
-				"omapfb.vram=0:4M " \
-				"earlyprintk " \
-				"vram=16M\0" ;
+enable_irqs:
+	cpsie I
+	bx lr
+
+disable_irqs:
+	cpsid I
+	bx lr
+
+.globl reset_cpu
+reset_cpu:
+        ldr     r1, rstctl      /* get addr for global reset reg */
+        ldr     r3, rstbit      /*  sw reset bit */
+        str     r3, [r1]        /* force reset */
+        mov     r0, r0
+_loop_forever:
+        b       _loop_forever
+rstctl:
+        .word   PRM_RSTCTRL
+rstbit:
+        .word   PRM_RSTCTRL_RESET_COLD_BIT

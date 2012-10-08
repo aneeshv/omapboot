@@ -31,8 +31,21 @@
 
 #include <types.h>
 #include <version.h>
+#include <omap_rom.h>
+#include <user_params.h>
 
 #define CEIL(a, b) (((a) / (b)) + ((a % b) > 0 ? 1 : 0))
+
+#if defined DO_MEMORY_TEST_DURING_FIRST_STAGE_IN_EBOOT || \
+defined DO_MEMORY_TEST_DURING_FIRST_STAGE_IN_IBOOT
+
+#define USER_RQ_MEMTEST		0x00FF004F
+#define USER_RQ_UMEMTEST	0x00FF002F
+void memtest(void *x, unsigned count);
+#endif
+
+#define USER_RQ_FASTBOOT	0x00FF0048
+#define USER_RQ_UFASTBOOT	0x00FF0028
 
 struct partition {
 	const char *name;
@@ -61,12 +74,6 @@ struct storage_specific_functions {
 	int (*erase)(u64 start_sec, u64 sectors);
 };
 
-struct bootloader_ops {
-	struct board_specific_functions *board_ops;
-	struct proc_specific_functions *proc_ops;
-	struct storage_specific_functions *storage_ops;
-};
-
 /* Use these functions to override the
  * default configuration for the processor */
 struct board_specific_functions {
@@ -92,6 +99,29 @@ struct board_specific_functions {
 	int (*board_configure_pwm_mode)(void);
 	u32 (*board_get_board_rev)(void);
 	int (*board_reset_reason)(void);
+	int (*board_fastboot_size_request)(struct usb *usb,
+						void *data, unsigned len);
+};
+
+#ifdef TWO_STAGE_OMAPBOOT
+struct board_usb_functions {
+	int (*omap_usb_open)(struct usb *usb);
+	void (*omap_usb_init)(struct usb *usb);
+	void (*omap_usb_close)(struct usb *usb);
+	int (*omap_usb_read)(struct usb *usb, void *data, unsigned len);
+	int (*omap_usb_write)(struct usb *usb, void *data, unsigned len);
+};
+void *init_board_usb_funcs(void);
+#endif
+
+struct bootloader_ops {
+	struct board_specific_functions *board_ops;
+	struct proc_specific_functions *proc_ops;
+	struct storage_specific_functions *storage_ops;
+#ifdef TWO_STAGE_OMAPBOOT
+	struct board_usb_functions *usb_ops;
+#endif
+	struct usb usb;
 };
 
 void* init_board_funcs(void);
@@ -101,6 +131,7 @@ unsigned long crc32(unsigned long crc, const unsigned char *buf,
 						unsigned int len);
 
 int get_downloadsize_from_string(int count, char *string);
+struct bootloader_ops *boot_common(unsigned bootdevice);
 
 /* Storage drivers function inits */
 struct storage_specific_functions *init_rom_mmc_funcs(int proc_id, u8 device);

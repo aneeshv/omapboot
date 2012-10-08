@@ -889,15 +889,16 @@ static int fastboot_flash(char *cmd, char *response, struct usb *usb)
 }
 
 static int fastboot_boot(struct bootloader_ops *boot_ops, char *cmd,
-						char *response, struct usb *usb)
+						char *response)
 {
+	struct usb *usb = &boot_ops->usb;
 	strcpy(response, "OKAY");
 	fastboot_tx_status(response, strlen(response), usb);
 
 	usb_close(usb);
 
 	printf("booting kernel...\n");
-	do_booti(boot_ops, "ram", transfer_buffer, usb);
+	do_booti(boot_ops, "ram", transfer_buffer);
 
 	return 0;
 }
@@ -924,15 +925,16 @@ static int fastboot_erase(char *cmd, char *response, struct usb *usb)
 	return ret;
 }
 
-void do_fastboot(struct bootloader_ops *boot_ops, struct usb *usb)
+void do_fastboot(struct bootloader_ops *boot_ops)
 {
 	int ret = 0;
 	char cmd[65];
-	int cmdsize = 0;
 
+	int cmdsize = 0;
 	/* Use 65 instead of 64, null gets dropped
 	strcpy's need the extra byte */
 	char response[65];
+	struct usb *usb = &boot_ops->usb;
 
 	fb_data->getsize = 0;
 
@@ -964,6 +966,22 @@ void do_fastboot(struct bootloader_ops *boot_ops, struct usb *usb)
 		memset(&cmd, 0, 64);
 		memset(&response, 0, 64);
 
+		/* omap4 rom_usb required an extra step in the exchange:
+			a request for the size to transfer.
+			Without this step, the rom code will hang.
+			This requires to use an older fastboot host
+			utility were this ws implemented (DB72) */
+
+		if (boot_ops->board_ops->board_fastboot_size_request) {
+			ret = boot_ops->board_ops->
+			board_fastboot_size_request(usb, &cmdsize, 4);
+			if (ret < 0) {
+				printf("failed to get fastboot command size\n");
+				strcpy(response, "FAIL");
+				goto fail;
+			}
+		}
+
 		/* receive the fastboot command from host */
 		ret = usb_read(usb, &cmd, cmdsize);
 		if (ret < 0) {
@@ -983,7 +1001,7 @@ void do_fastboot(struct bootloader_ops *boot_ops, struct usb *usb)
 		} else if (memcmp(cmd, "erase:", 6) == 0) {
 			ret = fastboot_erase(cmd + 6, response, usb);
 		} else if (memcmp(cmd, "boot", 4) == 0) {
-			ret = fastboot_boot(boot_ops, cmd + 4, response, usb);
+			ret = fastboot_boot(boot_ops, cmd + 4, response);
 		}
 
 		if (ret < 0)

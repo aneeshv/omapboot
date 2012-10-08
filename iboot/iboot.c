@@ -37,6 +37,7 @@
 #include <omap_rom.h>
 #include <usbboot_common.h>
 #include <alloc.h>
+#include <user_params.h>
 
 #ifdef DEBUG
 #define DBG(x...) printf(x)
@@ -45,88 +46,85 @@
 #endif /* DEBUG */
 
 static unsigned MSG = 0xaabbccdd;
-u32 public_rom_base;
 
-__attribute__((__section__(".mram")))
-static struct bootloader_ops boot_operations;
+#ifdef TWO_STAGE_OMAPBOOT
+
+static u32 load_from_usb(u32 addr, unsigned *_len, struct usb *usb)
+{
+	unsigned len, n, param = 0;
+	enable_irqs();
+
+	usb_queue_read(usb, &param, 4);
+	usb_write(usb, &MSG, 4);
+	n = usb_wait_read(usb);
+	if (n)
+		return 0;
+
+	if (usb_read(usb, &len, 4))
+		return 0;
+
+	usb_write(usb, &MSG, 4);
+
+	if (usb_read(usb, (void *) addr, len))
+		return 0;
+
+	*_len = len;
+
+#if DO_MEMORY_TEST_DURING_FIRST_STAGE_IN_IBOOT
+	if ((param == USER_RQ_MEMTEST) || (param == USER_RQ_UMEMTEST)) {
+		memtest((void *)0x82000000, 8*1024*1024);
+		memtest((void *)0xA0208000, 8*1024*1024);
+	}
+#endif
+	return param;
+}
+
+static int do_sboot(struct bootloader_ops *boot_ops, int bootdevice)
+{
+	int ret = 0;
+	unsigned len;
+
+	void (*Sboot)(u32 bootops_addr, int bootdevice, void *addr);
+	u32 bootops_addr = (u32) boot_ops;
+
+	u32 addr = CONFIG_ADDR_SBOOT;
+
+	ret = load_from_usb(addr, &len, &boot_ops->usb);
+	if (ret == 0)
+		return -1;
+
+	Sboot = (void (*)(u32, int, void *))(addr);
+	Sboot((u32) bootops_addr, (int) (bootdevice), (void *) addr);
+
+	return -1;
+}
+#endif
 
 void iboot(unsigned *info)
 {
-	int ret = 0;
-	struct usb usb;
-	struct bootloader_ops *boot_ops = &boot_operations;
+	struct bootloader_ops *boot_ops;
+	unsigned bootdevice = -1;
 
-	boot_ops->board_ops = init_board_funcs();
-	boot_ops->proc_ops = init_processor_id_funcs();
-	boot_ops->storage_ops = NULL;
-
-	if (boot_ops->proc_ops->proc_check_lpddr2_temp)
-		boot_ops->proc_ops->proc_check_lpddr2_temp();
-
-	if (boot_ops->proc_ops->proc_get_api_base)
-		public_rom_base = boot_ops->proc_ops->proc_get_api_base();
-
-	if (boot_ops->board_ops->board_mux_init)
-		boot_ops->board_ops->board_mux_init();
-
-	if (boot_ops->board_ops->board_ddr_init)
-		boot_ops->board_ops->board_ddr_init(boot_ops->proc_ops);
-
-	if (boot_ops->board_ops->board_signal_integrity_reg_init)
-		boot_ops->board_ops->board_signal_integrity_reg_init
-							(boot_ops->proc_ops);
-
-	ldelay(100);
-
-	if (boot_ops->board_ops->board_scale_vcores)
-		boot_ops->board_ops->board_scale_vcores();
-
-	if(boot_ops->board_ops->board_prcm_init)
-		boot_ops->board_ops->board_prcm_init();
-
-	init_memory_alloc();
-
-	if (boot_ops->board_ops->board_gpmc_init)
-		boot_ops->board_ops->board_gpmc_init();
-
-	if (boot_ops->board_ops->board_late_init)
-		boot_ops->board_ops->board_late_init();
-
-	enable_irqs();
-
-	serial_init();
-
-	printf("%s\n", ABOOT_VERSION);
-	printf("Build Info: "__DATE__ " - " __TIME__ "\n");
-
-	if (boot_ops->board_ops->board_pmic_enable)
-		boot_ops->board_ops->board_pmic_enable();
-
-	if (boot_ops->board_ops->board_configure_pwm_mode)
-		boot_ops->board_ops->board_configure_pwm_mode();
-
-	ret = usb_open(&usb);
-	if (ret != 0) {
-		printf("\nusb_open failed\n");
-		goto fail;
-	}
-
-	usb_write(&usb, &MSG, 4);
-
-	if (!boot_ops->board_ops->board_get_flash_slot)
+	if (info)
+		bootdevice = info[2] & 0xFF;
+	else
 		goto fail;
 
-	boot_ops->storage_ops = boot_ops->board_ops->board_set_flash_slot
-	(boot_ops->board_ops->board_get_flash_slot(), boot_ops->proc_ops,
-							boot_ops->storage_ops);
-	if (!boot_ops->storage_ops) {
-		printf("Unable to init storage\n");
+	boot_ops = boot_common(bootdevice);
+	if (!boot_ops)
 		goto fail;
-	}
 
-	do_fastboot(boot_ops, &usb);
+#ifndef TWO_STAGE_OMAPBOOT
+	usb_write(&boot_ops->usb, &MSG, 4);
+
+	usb_init(&boot_ops->usb);
+	do_fastboot(boot_ops);
+#else
+	do_sboot(boot_ops, bootdevice);
+#endif
 
 fail:
+	printf("Boot failed\n");
 	while (1)
 		;
 }
