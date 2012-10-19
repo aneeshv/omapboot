@@ -183,7 +183,11 @@ static int fastboot_getvar(const char *rx_buffer, char *tx_buffer,
 	} else if (!memcmp(rx_buffer, "cpu", 3)) {
 		strcpy(tx_buffer + 4, get_proc_version());
 	} else if (!memcmp(rx_buffer, "pmicrev", 7)) {
-		strcpy(tx_buffer + 4, pmic_get_silicon_revision());
+		if (fb_data->pmic_ops->pmic_read_sw_revision)
+			strcpy(tx_buffer + 4,
+				fb_data->pmic_ops->pmic_get_silicon_revision());
+		else
+			strcpy(tx_buffer, "not supported");
 	} else if (!memcmp(rx_buffer, "downloadsize", 12)) {
 		if (fb_data->getsize)
 			sprintf(tx_buffer + 4, "%08x", fb_data->getsize);
@@ -226,19 +230,30 @@ static int fastboot_getvar(const char *rx_buffer, char *tx_buffer,
 		strcpy(tx_buffer + strlen(tx_buffer), "rom version: ");
 		strcpy(tx_buffer + strlen(tx_buffer), get_rom_version());
 		fastboot_tx_status(tx_buffer, strlen(tx_buffer), usb);
+
 		/* pmic silicon revision */
 		strcpy(tx_buffer, "INFO");
 		strcpy(tx_buffer + strlen(tx_buffer), "pmicrev: ");
-		strcpy(tx_buffer + strlen(tx_buffer),
-						pmic_get_silicon_revision());
+		if (fb_data->pmic_ops->pmic_get_silicon_revision)
+			strcpy(tx_buffer + strlen(tx_buffer),
+				fb_data->pmic_ops->pmic_get_silicon_revision());
+		else
+			strcpy(tx_buffer, "not supported");
+
 		fastboot_tx_status(tx_buffer, strlen(tx_buffer), usb);
+
 		/* pmic OTP revision */
 		strcpy(tx_buffer, "INFO");
 		strcpy(tx_buffer + strlen(tx_buffer), "pmic otp rev: ");
-		sprintf(tx_buffer + strlen(tx_buffer), "%x",
-						palmas_read_sw_revision());
+		if (fb_data->pmic_ops->pmic_read_sw_revision)
+			sprintf(tx_buffer + strlen(tx_buffer), "%x",
+				fb_data->pmic_ops->pmic_read_sw_revision());
+		else
+			strcpy(tx_buffer, "not supported");
+
 		fastboot_tx_status(tx_buffer, strlen(tx_buffer), usb);
 
+		/*getvar all ends */
 		strcpy(tx_buffer, "OKAY");
 	} else {
 		DBG("fastboot_getvar():unsupported variable\n");
@@ -916,6 +931,11 @@ void do_fastboot(struct bootloader_ops *boot_ops)
 		return;
 	else
 		fb_data->storage_ops = boot_ops->storage_ops;
+
+	if (!boot_ops->pmic_ops)
+		return;
+	else
+		fb_data->pmic_ops = boot_ops->pmic_ops;
 
 	load_ptbl(fb_data->storage_ops, 1);
 

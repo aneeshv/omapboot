@@ -41,19 +41,6 @@ u32 public_rom_base;
 
 #ifdef TWO_STAGE_OMAPBOOT
 
-static struct board_usb_functions usb_funcs = {
-	.omap_usb_open = usb_open,
-	.omap_usb_init = usb_init,
-	.omap_usb_close = usb_close,
-	.omap_usb_write = usb_write,
-	.omap_usb_read = usb_read,
-};
-
-void *init_board_usb_funcs(void)
-{
-	return &usb_funcs;
-}
-
 #if defined DO_MEMORY_TEST_DURING_FIRST_STAGE_IN_EBOOT || \
 defined DO_MEMORY_TEST_DURING_FIRST_STAGE_IN_IBOOT
 /* This sanity memory test taken from aboot.c has no
@@ -94,9 +81,7 @@ struct bootloader_ops *boot_common(unsigned bootdevice)
 	boot_ops->board_ops = init_board_funcs();
 	boot_ops->proc_ops = init_processor_id_funcs();
 	boot_ops->storage_ops = NULL;
-#ifdef TWO_STAGE_OMAPBOOT
-	boot_ops->usb_ops = init_board_usb_funcs();
-#endif
+	boot_ops->pmic_ops = init_pmic_funcs();
 
 	if (boot_ops->proc_ops->proc_check_lpddr2_temp)
 		boot_ops->proc_ops->proc_check_lpddr2_temp();
@@ -139,14 +124,17 @@ struct bootloader_ops *boot_common(unsigned bootdevice)
 	printf("%s\n", ABOOT_VERSION);
 	printf("Build Info: "__DATE__ " - " __TIME__ "\n");
 
-	if (boot_ops->board_ops->board_pmic_enable)
-		boot_ops->board_ops->board_pmic_enable();
+	if (boot_ops->pmic_ops->pmic_enable)
+		boot_ops->pmic_ops->pmic_enable();
 
-	if (boot_ops->board_ops->board_reset_reason)
-		boot_ops->board_ops->board_reset_reason();
+	if (boot_ops->pmic_ops->pmic_read_reset_reason)
+		boot_ops->pmic_ops->pmic_read_reset_reason();
 
-	if (boot_ops->board_ops->board_configure_pwm_mode)
-		boot_ops->board_ops->board_configure_pwm_mode();
+	if (boot_ops->pmic_ops->pmic_configure_pwm_mode) {
+		ret = boot_ops->pmic_ops->pmic_configure_pwm_mode();
+		if (ret != 0)
+			printf("unable to configure PWM mode\n");
+	}
 
 	if (!boot_ops->board_ops->board_get_flash_slot ||
 			!boot_ops->board_ops->board_set_flash_slot)
@@ -155,13 +143,13 @@ struct bootloader_ops *boot_common(unsigned bootdevice)
 	dev_to_devstr(bootdevice, buf);
 	printf("sram: boot device: %s\n", buf);
 
-	if (bootdevice == DEVICE_USB)
+	if (bootdevice == DEVICE_USB) {
 		bootdevice = boot_ops->board_ops->board_get_flash_slot();
-
-	ret = usb_open(&boot_ops->usb);
-	if (ret != 0) {
-		printf("\nusb_open failed\n");
-		goto fail;
+		ret = usb_open(&boot_ops->usb, NO_INIT_USB);
+		if (ret != 0) {
+			printf("\nusb_open failed\n");
+			goto fail;
+		}
 	}
 
 	boot_ops->storage_ops = boot_ops->board_ops->board_set_flash_slot

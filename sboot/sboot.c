@@ -32,6 +32,7 @@
 
 #include <common_proc.h>
 #include <fastboot.h>
+#include <omap_rom.h>
 #include <usbboot_common.h>
 #include <alloc.h>
 
@@ -42,35 +43,6 @@
 #endif /* DEBUG */
 
 u32 public_rom_base;
-static struct bootloader_ops *boot_ops;
-
-int usb_open(struct usb *usb)
-{
-	boot_ops->usb_ops->omap_usb_open(usb);
-	return 1;
-}
-
-int usb_read(struct usb *usb, void *data, unsigned len)
-{
-	boot_ops->usb_ops->omap_usb_read(usb, data, len);
-	return 1;
-}
-
-int usb_write(struct usb *usb, void *data, unsigned len)
-{
-	boot_ops->usb_ops->omap_usb_write(usb, data, len);
-	return 1;
-}
-
-void usb_init(struct usb *usb)
-{
-	boot_ops->usb_ops->omap_usb_init(usb);
-}
-
-void usb_close(struct usb *usb)
-{
-	boot_ops->usb_ops->omap_usb_close(usb);
-}
 
 #ifdef BOARD_PROCESS_CMDLINE
 static void process_cmdline(struct bootloader_ops *boot_ops,
@@ -89,30 +61,43 @@ static void process_cmdline(struct bootloader_ops *boot_ops,
 
 void sboot(u32 bootops_addr, int bootdevice)
 {
+	int ret = 0;
 	char buf[DEV_STR_LENGTH];
-	boot_ops = (struct bootloader_ops *)bootops_addr;
+	struct bootloader_ops *boot_ops = (struct bootloader_ops *)bootops_addr;
+
+	if (boot_ops->proc_ops->proc_get_api_base)
+		public_rom_base = boot_ops->proc_ops->proc_get_api_base();
 
 	init_memory_alloc();
 
 	dev_to_devstr(bootdevice, buf);
 	printf("Second Stage Boot: boot device: %s\n", buf);
-	if (bootdevice != DEVICE_USB) {
-		if (boot_ops->board_ops->board_user_fastboot_request) {
-			if (boot_ops->board_ops->board_user_fastboot_request()) {
-				usb_init(&boot_ops->usb);
-				do_fastboot(boot_ops);
-			}
-		}
+	if (boot_ops->board_ops->board_user_fastboot_request) {
+		if (boot_ops->board_ops->board_user_fastboot_request())
+			goto fastboot;
 	}
 
 #ifdef BOARD_PROCESS_CMDLINE
 	do_cmdline(boot_ops, bootdevice);
-#else
-	if (bootdevice == DEVICE_USB) {
-		do_fastboot(boot_ops);
-	} else
-		do_booti(boot_ops, "storage", NULL);
 #endif
+
+	if (bootdevice == DEVICE_USB)
+		goto fastboot;
+	else
+		do_booti(boot_ops, "storage", NULL);
+
+fastboot:
+	if (bootdevice != DEVICE_USB) {
+		ret = usb_open(&boot_ops->usb, INIT_USB);
+		if (ret != 0) {
+			printf("\nusb_open failed\n");
+			goto fail;
+		}
+	}
+
+	do_fastboot(boot_ops);
+
+fail:
 	printf("boot failed\n");
 	while (1)
 		;

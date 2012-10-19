@@ -32,7 +32,6 @@
 #include <types.h>
 #include <version.h>
 #include <omap_rom.h>
-#include <user_params.h>
 
 #define CEIL(a, b) (((a) / (b)) + ((a % b) > 0 ? 1 : 0))
 
@@ -93,38 +92,31 @@ struct board_specific_functions {
 	struct storage_specific_functions *(*board_set_flash_slot)(u8 dev,
 				struct proc_specific_functions *proc_ops,
 				struct storage_specific_functions *storage_ops);
-	int (*board_pmic_enable)(void);
-	int (*board_pmic_disable)(void);
-	int (*board_configure_pwm_mode)(void);
 	u32 (*board_get_board_rev)(void);
-	int (*board_reset_reason)(void);
 	int (*board_fastboot_size_request)(struct usb *usb,
 						void *data, unsigned len);
 };
 
-#ifdef TWO_STAGE_OMAPBOOT
-struct board_usb_functions {
-	int (*omap_usb_open)(struct usb *usb);
-	void (*omap_usb_init)(struct usb *usb);
-	void (*omap_usb_close)(struct usb *usb);
-	int (*omap_usb_read)(struct usb *usb, void *data, unsigned len);
-	int (*omap_usb_write)(struct usb *usb, void *data, unsigned len);
+struct pmic_specific_functions {
+	int (*pmic_enable)(void);
+	int (*pmic_disable)(void);
+	int (*pmic_configure_pwm_mode)(void);
+	void (*pmic_read_reset_reason)(void);
+	int (*pmic_read_sw_revision)(void);
+	char* (*pmic_get_silicon_revision)(void);
 };
-void *init_board_usb_funcs(void);
-#endif
 
 struct bootloader_ops {
 	struct board_specific_functions *board_ops;
 	struct proc_specific_functions *proc_ops;
 	struct storage_specific_functions *storage_ops;
-#ifdef TWO_STAGE_OMAPBOOT
-	struct board_usb_functions *usb_ops;
-#endif
+	struct pmic_specific_functions *pmic_ops;
 	struct usb usb;
 };
 
 void* init_board_funcs(void);
 void* init_processor_id_funcs(void);
+void *init_pmic_funcs(void);
 
 unsigned long crc32(unsigned long crc, const unsigned char *buf,
 						unsigned int len);

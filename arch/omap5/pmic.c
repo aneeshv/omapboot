@@ -32,6 +32,7 @@
 #include <omap_rom.h>
 #include <common_proc.h>
 #include <string.h>
+#include <usbboot_common.h>
 
 #ifdef DEBUG
 #define DBG(x...) printf(x)
@@ -96,7 +97,7 @@ static int palmas_read_silicon_revision(u32 *revision)
 	return ret;
 }
 
-char *pmic_get_silicon_revision(void)
+char *palmas_get_silicon_revision(void)
 {
 	u32 revision = 0;
 	static char rev_id[8];
@@ -130,21 +131,18 @@ char *pmic_get_silicon_revision(void)
 	return rev_id;
 }
 
-int palmas_read_reset_reason(u32 *reason)
+static void palmas_read_reset_reason(void)
 {
 	int ret;
 
+	printf("OMAP reset reason PRM_RSTST = 0x%04x\n", readl(PRM_RSTST));
+
 	/* SWOFF_STATUS: qualify which switch off events generate a HW RESET */
 	ret = pmic_reg_access(HAL_I2C1, 0x48, 0xB1, 0, 1);
-	if (ret != 0) {
-		*reason = ret;
-		return 0;
-	}
-
-	return ret;
+	printf("PMIC reset reason SWOFF_STATUS = 0x%02x\n", ret);
 }
 
-int palmas_read_sw_revision(void)
+static int palmas_read_sw_revision(void)
 {
 	int ret;
 
@@ -155,7 +153,7 @@ int palmas_read_sw_revision(void)
 	return 0;
 }
 
-int palmas_configure_pwm_mode(void)
+static int palmas_configure_pwm_mode(void)
 {
 	int ret;
 
@@ -172,4 +170,16 @@ int palmas_configure_pwm_mode(void)
 	}
 
 	return ret;
+}
+
+struct pmic_specific_functions pmic_funcs = {
+	.pmic_configure_pwm_mode = palmas_configure_pwm_mode,
+	.pmic_read_reset_reason = palmas_read_reset_reason,
+	.pmic_read_sw_revision = palmas_read_sw_revision,
+	.pmic_get_silicon_revision = palmas_get_silicon_revision,
+};
+
+void *init_pmic_funcs(void)
+{
+	return &pmic_funcs;
 }

@@ -150,33 +150,6 @@ static void omap5uevm_prcm_init(void)
 	prcm_init();
 }
 
-static int omap5uevm_pmic_reset_reason(void)
-{
-	int ret = 0;
-	u32 pmic_reason;
-
-	printf("OMAP reset reason PRM_RSTST = 0x%04x\n", readl(PRM_RSTST));
-
-	ret = palmas_read_reset_reason(&pmic_reason);
-	if (ret != 0)
-		printf("unable to read palmas reset reason\n");
-
-	printf("PMIC reset reason SWOFF_STATUS = 0x%02x\n", pmic_reason);
-
-	return ret;
-}
-
-static int omap5uevm_configure_pwm_mode(void)
-{
-	int ret = 0;
-
-	ret = palmas_configure_pwm_mode();
-	if (ret != 0)
-		printf("unable to configure PWM mode\n");
-
-	return ret;
-}
-
 static int omap5uevm_storage_init(u8 dev,
 				struct storage_specific_functions *storage_ops)
 {
@@ -251,9 +224,7 @@ static struct board_specific_functions omap5uevm_funcs = {
 	.board_prcm_init = omap5uevm_prcm_init,
 	.board_scale_vcores = omap5uevm_scale_cores,
 	.board_storage_init = omap5uevm_storage_init,
-	.board_configure_pwm_mode = omap5uevm_configure_pwm_mode,
 	.board_get_board_rev = omap5uevm_get_board_rev,
-	.board_reset_reason = omap5uevm_pmic_reset_reason,
 };
 
 void* init_board_funcs(void)
