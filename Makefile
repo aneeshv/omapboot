@@ -242,19 +242,32 @@ MAKEALL_LENIENT ?= 0
 
 .EXPORT_ALL_VARIABLES:
 
-$(OUT)/eboot.ift: $(OUT)/eboot.bin $(OUT)/mkheader
+$(OUT)/eboot_gp.ift: $(OUT)/eboot.bin $(OUT)/mkheader
 	@echo generate $@
 	$(QUIET)./$(OUT)/mkheader $(EBOOT_TEXT_BASE) `wc -c $(OUT)/eboot.bin` add_gp_hdr > $@
 	$(QUIET)cat $(OUT)/eboot.bin >> $@
-	@echo Renaming eboot.ift to MLO ...Done!
-	$(QUIET)cp $(OUT)/eboot.ift $(OUT)/MLO
+	@echo Renaming eboot_gp.ift to $(BOARD)_GP_MLO ...Done!
+	$(QUIET)mv $@ $(OUT)/$(BOARD)_GP_MLO
+
+$(OUT)/eboot_hs.ift: $(OUT)/eboot.bin $(OUT)/iboot.bin $(OUT)/mkheader
+ifneq ("$(MSHIELD)", "")
+	@echo "MSHIELD path = $(MSHIELD)"
+	@echo Signing eboot.bin to generate signed MLO ...Done!
+	$(QUIET)/$(MSHIELD)/generate_MLO OMAP5430 ES1.0 $(OUT)/eboot.bin
+	$(QUIET)mv MLO $(OUT)/MLO
+	@echo Append Configuration Header to Signed MLO ...Done!
+	$(QUIET)./$(OUT)/mkheader $(EBOOT_TEXT_BASE) `wc -c $(OUT)/MLO` no_gp_hdr > $@
+	$(QUIET)cat $(OUT)/MLO >> $@
+	$(QUIET)mv $@ $(OUT)/$(BOARD)_HS_MLO
+	$(QUIET)rm $(OUT)/MLO
+endif
 
 $(OUT)/aboot.ift: $(OUT)/aboot.bin $(OUT)/mkheader
 	@echo generate $@
 	$(QUIET)./$(OUT)/mkheader $(ABOOT_TEXT_BASE) `wc -c $(OUT)/aboot.bin` no_gp_hdr > $@
 	$(QUIET)cat $(OUT)/aboot.bin >> $@
 
-ALL += boot_modules $(OUT)/aboot.ift $(OUT)/eboot.ift
+ALL += boot_modules $(OUT)/aboot.ift $(OUT)/eboot_gp.ift $(OUT)/eboot_hs.ift
 
 $(OUT_HOST_OBJ)/2ndstage.o: $(OUT)/aboot.bin $(OUT)/bin2c $(OUT)/mkheader
 	@echo generate $@
