@@ -55,6 +55,7 @@ else
 	CROSS_COMPILE ?= arm-eabi-
 endif
 
+MSHIELD := $(MSHIELD)
 BOARD ?= panda
 ARCH ?= arm
 MACH ?= omap4
@@ -268,6 +269,20 @@ $(OUT_HOST_OBJ)/iboot_gp.o: $(OUT)/iboot.bin $(OUT)/bin2c $(OUT)/mkheader
 	$(QUIET)cat $(OUT)/iboot.bin >> $@
 	$(QUIET)./$(OUT)/bin2c iboot_gp < $@ > $(OUT)/iboot_gp.c
 	$(QUIET)gcc -c $(EXTRAOPTS) -o $@ $(OUT)/iboot_gp.c
+
+ifneq ("$(MSHIELD)", "")
+$(OUT_HOST_OBJ)/iboot_hs.o: $(OUT)/iboot.bin $(OUT)/bin2c $(OUT)/mkheader
+	@echo Signing iboot.bin to generate signed ULO ...Done!
+	$(QUIET)/$(MSHIELD)/generate_ULO OMAP5430 ES1.0 $(OUT)/iboot.bin
+	$(QUIET)mv ULO $(OUT)/ULO
+	@echo Append Configuration Header to Signed ULO ...Done!
+	$(QUIET)./$(OUT)/mkheader $(IBOOT_TEXT_BASE) `wc -c $(OUT)/ULO` no_gp_hdr > $@
+	$(QUIET)cat $(OUT)/ULO >> $@
+	$(QUIET)rm $(OUT)/ULO
+	$(QUIET)./$(OUT)/bin2c iboot_hs < $@ > $(OUT)/iboot_hs.c
+	$(QUIET)gcc -c $(EXTRAOPTS) -o $@ $(OUT)/iboot_hs.c
+	$(QUIET)echo -n "#define EMBED_IBOOT_HS 1" >> $(USER_PARAMS_FILE)
+endif
 
 ifeq ($(DUAL_STAGE), 1)
 $(OUT_HOST_OBJ)/sboot-bin.o: $(OUT)/sboot.bin $(OUT)/bin2c
