@@ -79,13 +79,12 @@ static u32 load_from_usb(u32 addr, unsigned *_len, struct usb *usb)
 	return param;
 }
 
-static int do_sboot(struct bootloader_ops *boot_ops, int bootdevice)
+static int run_sboot(struct bootloader_ops *boot_ops)
 {
 	int ret = 0;
 	unsigned len;
 
-	void (*Sboot)(u32 bootops_addr, int bootdevice, void *addr);
-	u32 bootops_addr = (u32) boot_ops;
+	void (*Sboot)(struct bootloader_ops *boot_ops);
 
 	u32 addr = CONFIG_ADDR_SBOOT;
 
@@ -94,35 +93,23 @@ static int do_sboot(struct bootloader_ops *boot_ops, int bootdevice)
 		return -1;
 
 	Sboot = (void (*)(u32, int, void *))(addr);
-	Sboot((u32) bootops_addr, (int) (bootdevice), (void *) addr);
+	Sboot(boot_ops);
 
 	return -1;
 }
 #endif
 
-void iboot(unsigned *info)
+void do_iboot(struct bootloader_ops *boot_ops)
 {
-	struct bootloader_ops *boot_ops;
-	unsigned bootdevice = -1;
-
-	if (info)
-		bootdevice = info[2] & 0xFF;
-	else
-		goto fail;
-
-	boot_ops = boot_common(bootdevice);
-	if (!boot_ops)
-		goto fail;
-
-#ifndef TWO_STAGE_OMAPBOOT
 	usb_write(&boot_ops->usb, &MSG, 4);
 	do_fastboot(boot_ops);
-#else
-	do_sboot(boot_ops, bootdevice);
-#endif
+}
 
-fail:
-	printf("Boot failed\n");
-	while (1)
-		;
+void iboot(struct bootloader_ops *boot_ops)
+{
+#ifdef TWO_STAGE_OMAPBOOT
+	run_sboot(boot_ops);	
+#else
+	do_iboot(boot_ops);
+#endif
 }

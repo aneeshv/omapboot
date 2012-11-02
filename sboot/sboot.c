@@ -59,18 +59,18 @@ static void process_cmdline(struct bootloader_ops *boot_ops,
 }
 #endif
 
-void sboot(u32 bootops_addr, int bootdevice)
+void sboot(struct bootloader_ops *boot_ops)
 {
 	int ret = 0;
 	char buf[DEV_STR_LENGTH];
-	struct bootloader_ops *boot_ops = (struct bootloader_ops *)bootops_addr;
+	int bootdevice = boot_ops->boot_device;
 
 	if (boot_ops->proc_ops->proc_get_api_base)
 		public_rom_base = boot_ops->proc_ops->proc_get_api_base();
 
 	init_memory_alloc();
 
-	dev_to_devstr(bootdevice, buf);
+	dev_to_devstr(, buf);
 	printf("Second Stage Boot: boot device: %s\n", buf);
 	if (boot_ops->board_ops->board_user_fastboot_request) {
 		if (boot_ops->board_ops->board_user_fastboot_request())
@@ -82,22 +82,11 @@ void sboot(u32 bootops_addr, int bootdevice)
 #endif
 
 	if (bootdevice == DEVICE_USB)
-		goto fastboot;
+		do_iboot(boot_ops);
 	else
-		do_booti(boot_ops, "storage", NULL);
+		do_eboot(boot_ops);
 
-fastboot:
-	if (bootdevice != DEVICE_USB) {
-		ret = usb_open(&boot_ops->usb, INIT_USB);
-		if (ret != 0) {
-			printf("\nusb_open failed\n");
-			goto fail;
-		}
-	}
-
-	do_fastboot(boot_ops);
-
-fail:
+	/* If we reach here boot has failed */
 	printf("boot failed\n");
 	while (1)
 		;

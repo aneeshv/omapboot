@@ -112,6 +112,8 @@ struct bootloader_ops {
 	struct storage_specific_functions *storage_ops;
 	struct pmic_specific_functions *pmic_ops;
 	struct usb usb;
+	int    boot_device;
+	int    flash_device;
 };
 
 void* init_board_funcs(void);
@@ -128,4 +130,10 @@ struct bootloader_ops *boot_common(unsigned bootdevice);
 struct storage_specific_functions *init_rom_mmc_funcs(int proc_id, u8 device);
 struct storage_specific_functions *init_rom_sata_funcs(int proc_id, u8 device);
 
+/* eboot and iboot functions */
+void eboot(struct bootloader_ops *boot_ops);
+void do_eboot(struct bootloader_ops *boot_ops);
+
+void iboot(struct bootloader_ops *boot_ops);
+void do_iboot(struct bootloader_ops *boot_ops);
 #endif

@@ -72,11 +72,30 @@ void memtest(void *x, unsigned count)
 #endif
 #endif
 
-struct bootloader_ops *boot_common(unsigned bootdevice)
+static int init_storage(struct bootloader_ops *boot_ops)
 {
-	int ret = 0;
+	boot_ops->storage_ops = boot_ops->board_ops->board_set_flash_slot
+		(boot_ops->flash_device,
+		boot_ops->proc_ops, boot_ops->storage_ops);
+
+	if (!boot_ops->storage_ops) {
+		printf("Unable to init storage\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+void main(unsigned int *info)
+{
+	int ret = 0, bootdevice = -1;
 	struct bootloader_ops *boot_ops = &boot_operations;
 	char buf[DEV_STR_LENGTH];
+
+	if (info)
+		boot_ops->boot_device = info[2] & 0xFF;
+	else
+		goto fail;
 
 	boot_ops->board_ops = init_board_funcs();
 	boot_ops->proc_ops = init_processor_id_funcs();
@@ -136,6 +155,7 @@ struct bootloader_ops *boot_common(unsigned bootdevice)
 			printf("unable to configure PWM mode\n");
 	}
 
+
 	if (!boot_ops->board_ops->board_get_flash_slot ||
 			!boot_ops->board_ops->board_set_flash_slot)
 		goto fail;
@@ -143,29 +163,27 @@ struct bootloader_ops *boot_common(unsigned bootdevice)
 	dev_to_devstr(bootdevice, buf);
 	printf("sram: boot device: %s\n", buf);
 
-	if (bootdevice == DEVICE_USB) {
-		bootdevice = boot_ops->board_ops->board_get_flash_slot();
-		ret = usb_open(&boot_ops->usb, NO_INIT_USB);
-		if (ret != 0) {
-			printf("\nusb_open failed\n");
-			goto fail;
-		}
-	}
+	if (bootdevice == DEVICE_USB)
+		boot_ops->flash_device =
+			boot_ops->board_ops->board_get_flash_slot();
+	else
+		boot_ops->flash_device = boot_ops->boot_device;
 
-	boot_ops->storage_ops = boot_ops->board_ops->board_set_flash_slot
-			(bootdevice, boot_ops->proc_ops, boot_ops->storage_ops);
-	if (!boot_ops->storage_ops) {
-		printf("Unable to init storage\n");
+	/* Storage is needed in all flows */
+	ret = init_storage(boot_ops);
+
+	if (ret)
 		goto fail;
-	}
 
-	return boot_ops;
+#ifdef CONFIG_EBOOT 
+	eboot(boot_ops);
+#else
+	iboot(boot_ops);
+#endif
 
 fail:
+	/* If execution reaches here boot has failed */
 	printf("boot failed\n");
 	while (1)
 		;
-
-	return NULL;
 }
-

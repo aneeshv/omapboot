@@ -47,13 +47,11 @@
 #endif /* DEBUG */
 
 #ifdef TWO_STAGE_OMAPBOOT
-static int do_sboot(struct bootloader_ops *boot_ops, int bootdevice)
+static int run_sboot(struct bootloader_ops *boot_ops)
 {
 	int ret = 0;
 	struct fastboot_ptentry *pte;
-	void (*Sboot)(u32 bootops_addr, int bootdevice, void *addr);
-
-	u32 bootops_addr = (u32) boot_ops;
+	void (*Sboot)(struct bootloader_ops *boot_ops);
 
 	int sector_sz = boot_ops->storage_ops->get_sector_size();
 
@@ -82,59 +80,43 @@ static int do_sboot(struct bootloader_ops *boot_ops, int bootdevice)
 	}
 
 	Sboot = (void (*)(u32, int, void *))(addr);
-	Sboot((u32) bootops_addr, (int) bootdevice, (void *) addr);
+	Sboot(boot_ops);
 
 	return -1;
 }
 #endif
 
-void eboot(unsigned *info)
+void do_eboot(struct bootloader_ops *boot_ops)
 {
-	int ret = 0;
-	unsigned bootdevice = -1;
-	struct bootloader_ops *boot_ops;
+	int err;
 
-	if (info)
-		bootdevice = info[2] & 0xFF;
-	else
-		goto fail;
-
-	boot_ops = boot_common(bootdevice);
-	if (!boot_ops)
-		goto fail;
-
-	if (info)
-		bootdevice = info[2] & 0xFF;
-	else
-		goto fail;
-
-#ifdef TWO_STAGE_OMAPBOOT
-#if DO_MEMORY_TEST_DURING_FIRST_STAGE_IN_EBOOT
-	memtest((void *)0x82000000, 8*1024*1024);
-	memtest((void *)0xA0208000, 8*1024*1024);
-#endif
-	ret = do_sboot(boot_ops, bootdevice);
-	if (ret != 0)
-		goto fail;
-#else
 	if (boot_ops->board_ops->board_user_fastboot_request)
 		if (boot_ops->board_ops->board_user_fastboot_request())
 			goto fastboot;
 
 	do_booti(boot_ops, "storage", NULL);
+	return;
 
 fastboot:
-	ret = usb_open(&boot_ops->usb, INIT_USB);
-	if (ret != 0) {
-		printf("\nusb_open failed\n");
-		goto fail;
+	err = usb_open(&boot_ops->usb, INIT_USB);
+	if (err) {
+		printf("Opening USB failed\n");
+		return;
 	}
 	do_fastboot(boot_ops);
 
-#endif
+	return ret;
+}
 
-fail:
-	printf("boot failed\n");
-	while (1)
-		;
+void eboot(struct bootloader_ops *boot_ops)
+{
+#ifdef TWO_STAGE_OMAPBOOT
+#if DO_MEMORY_TEST_DURING_FIRST_STAGE_IN_EBOOT
+	memtest((void *)0x82000000, 8*1024*1024);
+	memtest((void *)0xA0208000, 8*1024*1024);
+#endif
+	run_sboot(boot_ops);
+#else
+	do_eboot(boot_ops);
+#endif
 }
