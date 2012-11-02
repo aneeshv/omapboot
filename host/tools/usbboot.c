@@ -170,6 +170,46 @@ fail:
 	return 0;
 }
 
+static const char *help =
+	"\nusbboot syntax and options:\n\n"
+	"usbboot [ -i <iboot-image> ] <command>\n\n"
+	"-i <boot-image>\n"
+	"\t Optional over-ride for the iboot image (2nd image used for"
+	"\t USB peripheral booting). Please note that iboot.ift is embedded"
+	"\t for GP and TI dummy key HS devices. Only HS devices with non-dummy"
+	"\t key need to use this option.\n\n"
+	"COMMANDS\n\n"
+	"\t -f\n"
+	"\t\t Enter fastboot mode. Initializes the target and puts it"
+	"\t\t into fastboot mode\n\n"
+	"\t -m\n"
+	"\t\t execute SDRAM memory tests from SRAM\n\n"
+	"--------------------------------------------------\n"
+	"example: ./out/<board>/usbboot boot.img\n"
+	"---- ---- ---- ---- OR ---- ---- ---- ----\n"
+	"example: ./out/<board>/usbboot out/<board>/aboot.ift "
+				"boot.img\n (for HD boards, aboot.ift needs signing)"
+	"=>this will download and execute aboot second\n"
+				"stage in SRAM and then download and execute\n"
+				"boot.img in SDRAM\n"
+	"--------------------------------------------------\n"
+	"example: ./out/<board>/usbboot -f\n"
+	"---- ---- ---- ---- OR ---- ---- ---- ----\n"
+	"example: ./out/<board>/usbboot -f "
+							"out<board>/iboot.ift\n"
+	"=>this will download and execute iboot second\n"
+	"stage in SRAM along with the configuration header\n"
+	"(CH) and then enter into FASTBOOT mode\n"
+	"--------------------------------------------------\n"
+	"example: ./out/<board>/usbboot -M\n"
+	"---- ---- ---- ---- OR ---- ---- ---- ----\n"
+	"example: ./out/<board>/usbboot -m\n"
+	"=>this will execute SDRAM memory tests from SRAM\n"
+	"during the first stage boot."
+	"--------------------------------------------------\n";
+
+
+
 static int usage(void)
 {
 	fprintf(stderr, "\nusbboot syntax and options:\n\n");
